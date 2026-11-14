@@ -1,0 +1,16 @@
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local tools and generated files
+.venv/
+__pycache__/
+.vscode/
+*.log
+
+# Large experiment captures are kept outside Git
+*.pcap
+*.pcapng

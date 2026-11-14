@@ -1,0 +1,81 @@
+name: GNS3 foundation check
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: gns3-foundation-check
+  cancel-in-progress: false
+
+jobs:
+  check-foundation:
+    name: Check existing GNS3 lab
+    runs-on: [self-hosted, Windows, X64, gns-lab]
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: powershell
+    env:
+      GNS3_API_URL: http://127.0.0.1:3078
+      GNS3_PROJECT_ID: c2de961e-c2bb-4849-bda7-2ae06e3fd28b
+    steps:
+      - name: Verify controller, VM, project and PCs
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $apiBase = $env:GNS3_API_URL.TrimEnd('/')
+
+          function Read-Gns3Api([string] $ApiPath) {
+            try {
+              Invoke-RestMethod -Uri "$apiBase$ApiPath" -Method Get -TimeoutSec 15
+            }
+            catch {
+              throw "GET $ApiPath failed. Check that GNS3 is running on the runner PC, port 3078 is correct, and API authentication permits this request. Details: $($_.Exception.Message)"
+            }
+          }
+
+          Write-Output "Runner computer: $env:COMPUTERNAME"
+          Write-Output "Controller: $apiBase"
+          $version = Read-Gns3Api '/v2/version'
+          if ([string]::IsNullOrWhiteSpace($version.version)) {
+            throw 'The controller returned no GNS3 version.'
+          }
+          Write-Output "GNS3 version: $($version.version)"
+
+          $computes = @(Read-Gns3Api '/v2/computes')
+          $vm = @($computes | Where-Object { $_.compute_id -eq 'vm' })
+          if ($vm.Count -ne 1 -or $vm[0].connected -ne $true) {
+            throw 'The GNS3 VM is missing or disconnected. Open GNS3 and check its VM connection.'
+          }
+          Write-Output "VM connected: $($vm[0].host):$($vm[0].port)"
+
+          $projects = @(Read-Gns3Api '/v2/projects')
+          $project = @($projects | Where-Object { $_.project_id -eq $env:GNS3_PROJECT_ID })
+          if ($project.Count -ne 1 -or $project[0].status -ne 'opened') {
+            throw 'The foundation project is missing or closed. Open the original two-PC project in GNS3.'
+          }
+          Write-Output "Project open: $($project[0].name)"
+
+          $nodes = @(Read-Gns3Api "/v2/projects/$env:GNS3_PROJECT_ID/nodes")
+          foreach ($expectedName in @('PC1', 'PC2')) {
+            $node = @($nodes | Where-Object { $_.name -eq $expectedName })
+            if ($node.Count -ne 1) {
+              throw "Expected exactly one device named $expectedName."
+            }
+            if ($node[0].node_type -ne 'vpcs' -or $node[0].compute_id -ne 'vm' -or $node[0].status -ne 'started') {
+              throw "$expectedName must be a started VPCS device running on the GNS3 VM."
+            }
+            Write-Output "${expectedName}: started on VM"
+          }
+
+          @(
+            '## GNS3 foundation check passed'
+            ''
+            "- Controller version: $($version.version)"
+            '- GNS3 VM: connected'
+            '- Foundation project: opened'
+            '- PC1 and PC2: started on the GNS3 VM'
+            ''
+            'This check used GET requests only. It did not change the lab or test packet connectivity.'
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
