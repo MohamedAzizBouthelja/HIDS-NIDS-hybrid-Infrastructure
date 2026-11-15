@@ -36,10 +36,12 @@ function Invoke-RestMethod {
     if ($Method -eq 'GET') {
         switch ($path) {
             '/v2/version' { return [pscustomobject]@{ version = '2.2.61' } }
-            '/v2/computes' { return [pscustomobject]@{ compute_id = 'vm'; connected = $state.connected } }
-            '/v2/projects' { return $state.projects.ToArray() }
-            "/v2/projects/$managedId/nodes" { return $state.nodes.ToArray() }
-            "/v2/projects/$managedId/links" { return $state.links.ToArray() }
+            # Invoke-RestMethod emits a JSON array as one pipeline object.
+            # Keep that shape, including empty and single-item arrays.
+            '/v2/computes' { return ,@([pscustomobject]@{ compute_id = 'vm'; connected = $state.connected }) }
+            '/v2/projects' { return ,($state.projects.ToArray()) }
+            "/v2/projects/$managedId/nodes" { return ,($state.nodes.ToArray()) }
+            "/v2/projects/$managedId/links" { return ,($state.links.ToArray()) }
             default { throw "Mock rejected unexpected GET $path" }
         }
     }
@@ -190,6 +192,23 @@ try {
     Assert-True ($global:CoreTopologyMock.nodes.Count -eq 4 -and $global:CoreTopologyMock.links.Count -eq 5) 'Interrupted deployment recovery'
     Assert-True ($global:CoreTopologyMock.writes.Count -eq 7) 'Resume creates only two missing routers and five links'
     Write-Output 'PASS: interrupted deployment resumes without deleting existing objects'
+
+    Reset-MockLab
+    $global:CoreTopologyMock.failNodeName = 'R2'
+    $failed = $false
+    try { Invoke-Deployment } catch { $failed = $true }
+    Assert-True ($failed -and $global:CoreTopologyMock.nodes.Count -eq 1) 'Expected interruption after one router'
+    $global:CoreTopologyMock.failNodeName = ''
+    $global:CoreTopologyMock.writes.Clear()
+    Invoke-Deployment
+    Assert-True ($global:CoreTopologyMock.writes.Count -eq 8) 'Singleton node response: resume creates three routers and five links'
+    Write-Output 'PASS: one-router and empty-link JSON arrays are handled correctly'
+
+    while ($global:CoreTopologyMock.links.Count -gt 1) { $global:CoreTopologyMock.links.RemoveAt(1) }
+    $global:CoreTopologyMock.writes.Clear()
+    Invoke-Deployment
+    Assert-True ($global:CoreTopologyMock.writes.Count -eq 4 -and $global:CoreTopologyMock.links.Count -eq 5) 'Singleton link response: create only four missing links'
+    Write-Output 'PASS: single-link JSON array is handled correctly'
 
     $global:CoreTopologyMock.links.RemoveAt(0)
     $global:CoreTopologyMock.writes.Clear()

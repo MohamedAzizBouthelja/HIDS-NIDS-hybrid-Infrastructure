@@ -29,7 +29,8 @@ jobs:
 
           function Read-Gns3Api([string] $ApiPath) {
             try {
-              Invoke-RestMethod -Uri "$apiBase$ApiPath" -Method Get -TimeoutSec 15
+              $response = Invoke-RestMethod -Uri "$apiBase$ApiPath" -Method Get -TimeoutSec 15
+              foreach ($item in $response) { Write-Output $item }
             }
             catch {
               throw "GET $ApiPath failed. Keep GNS3 running on the runner PC and open Router-Boot-Test. Check port 3076 and API authentication. Details: $($_.Exception.Message)"

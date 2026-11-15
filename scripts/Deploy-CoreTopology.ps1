@@ -24,7 +24,12 @@ function Invoke-Gns3([string] $Method, [string] $ApiPath, $Payload = $null) {
         $request.ContentType = 'application/json'
         $request.Body = $Payload | ConvertTo-Json -Depth 20 -Compress
     }
-    try { Invoke-RestMethod @request }
+    try {
+        # Invoke-RestMethod emits a JSON array as one pipeline object.
+        # Enumerate it here so callers' @(...) captures actual list items.
+        $response = Invoke-RestMethod @request
+        foreach ($item in $response) { Write-Output $item }
+    }
     catch {
         # Do not retry POST automatically: the server may already have applied it.
         throw "$Method $ApiPath failed: $($_.Exception.Message). Inspect the lab and rerun to resume; existing matching objects are reused."
