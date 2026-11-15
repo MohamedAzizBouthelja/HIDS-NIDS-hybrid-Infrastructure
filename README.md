@@ -239,9 +239,11 @@ and ports are read from the GNS3 API rather than assumed.
 ### Run the interface workflow
 
 1. Keep Hybrid-Core-Lab open and all four routers started.
-2. Finish the initial IOS setup prompts manually. Consoles must be at an
-   EXEC prompt (`Router>`, `R1#`, etc.). Password-protected consoles and
-   unfinished initial setup are rejected. No passwords are guessed or sent.
+2. Finish yes/no IOS setup questions manually. The reader accepts an EXEC
+   prompt (`Router>`, `R1#`, etc.) and can send RETURN up to two additional
+   times at the exact `Press RETURN to get started` prompt during initial
+   connection. Password-protected consoles and unfinished yes/no setup
+   dialogs are rejected. No passwords or setup answers are sent.
 3. Close your console windows before the job and do not type into a router
    console while automation is using it.
 4. Publish the files, then select **Actions > GNS3 core interfaces > Run

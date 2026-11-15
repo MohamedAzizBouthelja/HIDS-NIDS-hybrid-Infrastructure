@@ -47,11 +47,12 @@ function Get-IosTerminalState([string] $Text) {
     return [pscustomobject]@{ Kind = 'waiting'; Prompt = ''; Detail = $lastLine }
 }
 
-function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutSeconds = 30) {
+function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutSeconds = 30, [switch] $AllowInitialReturn) {
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
     $quietTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $buffer = [byte[]]::new(8192)
     $text = [System.Text.StringBuilder]::new()
+    $wakeReturns = 0
     while ($timer.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
         if ($Session.Stream.DataAvailable) {
             $read = $Session.Stream.Read($buffer, 0, $buffer.Length)
@@ -66,6 +67,17 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
         $plain = $text.ToString() -replace '\x1b\[[0-9;]*[A-Za-z]', ''
         $terminal = Get-IosTerminalState $plain
         if ($terminal.Kind -eq 'challenge' -and $quietTimer.ElapsedMilliseconds -ge 500) {
+            if ($AllowInitialReturn -and -not $ExpectedEcho -and $wakeReturns -lt 2 -and
+                $terminal.Detail -match '(?i)^Press RETURN to get started[!.]?$') {
+                # The first connection CR can precede IOS readiness. Send only
+                # RETURN at this exact prompt; never answer login/setup questions.
+                Write-Verbose 'Sending RETURN at the IOS ready prompt.'
+                $Session.Stream.Write([byte[]]@(13), 0, 1)
+                $wakeReturns++
+                [void]$text.Clear()
+                $quietTimer.Restart()
+                continue
+            }
             throw "IOS is currently waiting at '$($terminal.Detail)'. Prepare this console manually; no credentials or setup answers were sent."
         }
         if ($terminal.Kind -eq 'prompt' -and $quietTimer.ElapsedMilliseconds -ge 100 -and
@@ -107,7 +119,7 @@ function Open-IosConsole([string] $Address, [int] $Port) {
             TelnetState = 'data'; TelnetCommand = 0
         }
         $stream.Write([byte[]]@(13), 0, 1)
-        $null = Read-IosResponse $session
+        $null = Read-IosResponse $session -AllowInitialReturn
         if ($session.Prompt -match '\(') { throw 'The console is already in configuration mode. Exit to an EXEC prompt first.' }
         if ($session.Prompt.EndsWith('>')) { $null = Send-IosCommand $session 'enable' }
         if (-not $session.Prompt.EndsWith('#')) { throw 'The console is not in privileged EXEC mode.' }

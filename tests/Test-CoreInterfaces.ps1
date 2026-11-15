@@ -33,7 +33,7 @@ foreach ($activePrompt in @('Password:', 'Username:', 'Would you like to enter t
     $terminal = Get-IosTerminalState ("Router#`r`n" + $activePrompt)
     Assert-InterfaceTest ($terminal.Kind -eq 'challenge') 'A live challenge must override an earlier historical prompt'
 }
-Write-Output 'PASS: live authentication, setup and RETURN prompts are still rejected'
+Write-Output 'PASS: live authentication, setup and RETURN prompts are identified at the terminal tail'
 $terminal = Get-IosTerminalState "R1(config-if)#*Nov 15 10:00:00: %LINK-3-UPDOWN: Interface FastEthernet0/0, changed state to up`r`n"
 Assert-InterfaceTest ($terminal.Kind -eq 'prompt' -and $terminal.Prompt -eq 'R1(config-if)#') 'A syslog line must not hide the current configuration prompt'
 Write-Output 'PASS: known syslog messages after the prompt do not hide it'

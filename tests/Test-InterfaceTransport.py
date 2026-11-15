@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = json.loads((ROOT / "gns3/core-topology.json").read_text())
 PROJECT_ID = MANIFEST["project"]["project_id"]
 POWERSHELL = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
-COUNTERS = dict(opens=0, changes=0, saves=0, measured_pings=0)
+COUNTERS = dict(opens=0, changes=0, saves=0, measured_pings=0, wake_returns=0)
 
 
 class ConsoleHandler(socketserver.BaseRequestHandler):
@@ -31,6 +31,7 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
         time.sleep(0.05)
         self.request.sendall(b' no\r\nPress RETURN to get started!\r\nPassword:\r\nRouter#\r\n')
         line, telnet_state, mode, selected = bytearray(), "data", "", None
+        waiting_for_return = True
         while True:
             chunk = self.request.recv(8192)
             if not chunk:
@@ -53,6 +54,12 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
                 command = line.decode("ascii")
                 line.clear()
                 if not command:
+                    if waiting_for_return:
+                        # An early connection CR can arrive before IOS is ready.
+                        self.request.sendall(b'\r\nPress RETURN to get started.')
+                        waiting_for_return = False
+                        continue
+                    COUNTERS["wake_returns"] += 1
                     self.request.sendall(("\r\n" + router["hostname"] + "#").encode())
                     continue
                 body = ""
@@ -160,14 +167,53 @@ def main():
                 assert COUNTERS["changes"] == 24, COUNTERS
                 print("PASS: entry-point apply uses real HTTP and four TCP console connections")
         assert COUNTERS["saves"] == 8 and COUNTERS["measured_pings"] == 20, COUNTERS
+        assert COUNTERS["wake_returns"] == 8, COUNTERS
         evidence = json.loads((evidence_dir / "ping-results.json").read_text(encoding="utf-8-sig"))
         assert len(evidence) == 10 and all(record["passed"] for record in evidence)
         print("PASS: repeat apply makes no configuration changes; ten measured ping records saved")
+        print("PASS: each console receives RETURN after its ready message, including on reconnect")
     finally:
         for server in servers:
             server.shutdown()
             server.server_close()
 
 
+def check_live_challenges():
+    """Auth/setup receive no answers; RETURN retries have a strict bound."""
+    for challenge, expected_returns in (("Password:", 1), ("Username:", 1),
+                                        ("Would you like to enter the initial configuration dialog? [yes/no]:", 1),
+                                        ("Press RETURN to get started.", 3)):
+        received = bytearray()
+
+        class ChallengeHandler(socketserver.BaseRequestHandler):
+            def handle(self):
+                self.request.settimeout(10)
+                self.request.sendall(("Router#\r\n" + challenge).encode())
+                while True:
+                    data = self.request.recv(1024)
+                    if not data:
+                        return
+                    received.extend(data)
+                    self.request.sendall(("\r\n" + challenge).encode())
+
+        server = ConsoleServer(("127.0.0.1", 0), ChallengeHandler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        transport = str(ROOT / "scripts/IosConsole.ps1").replace("'", "''")
+        code = ("$ErrorActionPreference='Stop'; . '" + transport + "'; $rejected=$false; "
+                "try { $null=Open-IosConsole '127.0.0.1' " + str(server.server_address[1]) + " } "
+                "catch { $rejected=$_.Exception.Message -like '*currently waiting*' }; "
+                "if (-not $rejected) { throw 'Expected a bounded rejection' }")
+        try:
+            result = subprocess.run([POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", code],
+                                    capture_output=True, text=True, errors="replace", timeout=15)
+            assert result.returncode == 0, (result.stdout, result.stderr)
+            assert bytes(received) == b"\r" * expected_returns, (challenge, received)
+            print("PASS: live challenge receives only the permitted RETURN bytes -", challenge)
+        finally:
+            server.shutdown()
+            server.server_close()
+
+
 if __name__ == "__main__":
     main()
+    check_live_challenges()
