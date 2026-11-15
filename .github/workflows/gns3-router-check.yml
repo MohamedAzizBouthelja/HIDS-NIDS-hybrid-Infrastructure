@@ -1,0 +1,104 @@
+name: GNS3 router check
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: gns3-router-check
+  cancel-in-progress: false
+
+jobs:
+  check-router:
+    name: Verify R1 hardware baseline
+    runs-on: [self-hosted, Windows, X64, gns-lab]
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: powershell
+    env:
+      GNS3_API_URL: http://127.0.0.1:3078
+      GNS3_PROJECT_ID: 7b095e33-a5df-43c0-818c-ccb01e8847d5
+      GNS3_NODE_ID: 812c3358-55d9-4e22-8aac-23f4eab1b483
+    steps:
+      - name: Check VM, router and Ethernet adapters
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $apiBase = $env:GNS3_API_URL.TrimEnd('/')
+
+          function Read-Gns3Api([string] $ApiPath) {
+            try {
+              Invoke-RestMethod -Uri "$apiBase$ApiPath" -Method Get -TimeoutSec 15
+            }
+            catch {
+              throw "GET $ApiPath failed. Keep GNS3 running on the runner PC and open Router-Boot-Test. Check port 3078 and API authentication. Details: $($_.Exception.Message)"
+            }
+          }
+
+          $computes = @(Read-Gns3Api '/v2/computes')
+          $vm = @($computes | Where-Object { $_.compute_id -eq 'vm' })
+          if ($vm.Count -ne 1 -or $vm[0].connected -ne $true) {
+            throw 'The GNS3 VM is missing or disconnected.'
+          }
+
+          $project = Read-Gns3Api "/v2/projects/$env:GNS3_PROJECT_ID"
+          if ($project.project_id -ne $env:GNS3_PROJECT_ID -or $project.status -ne 'opened') {
+            throw 'Open the original Router-Boot-Test project before running this check.'
+          }
+
+          $node = Read-Gns3Api "/v2/projects/$env:GNS3_PROJECT_ID/nodes/$env:GNS3_NODE_ID"
+          if ($node.node_id -ne $env:GNS3_NODE_ID -or $node.project_id -ne $env:GNS3_PROJECT_ID -or $node.name -cne 'R1') {
+            throw 'The API response does not identify the expected R1 in the router test project.'
+          }
+          if ($node.node_type -ne 'dynamips' -or $node.compute_id -ne 'vm' -or $node.status -ne 'started') {
+            throw 'R1 must be a started Dynamips router on the GNS3 VM.'
+          }
+          if ($node.properties.platform -ne 'c7200' -or $node.properties.ram -ne 512) {
+            throw 'Expected a c7200 router with 512 MiB RAM.'
+          }
+
+          $expectedSlots = [ordered]@{
+            slot0 = 'C7200-IO-FE'
+            slot1 = 'PA-FE-TX'
+            slot2 = 'PA-FE-TX'
+            slot3 = 'PA-FE-TX'
+            slot4 = 'PA-FE-TX'
+            slot5 = 'PA-FE-TX'
+          }
+          foreach ($slot in $expectedSlots.Keys) {
+            if ($node.properties.$slot -ne $expectedSlots[$slot]) {
+              throw "Adapter mismatch in ${slot}: expected $($expectedSlots[$slot]), found $($node.properties.$slot). No changes were applied."
+            }
+          }
+          if ($null -ne $node.properties.slot6) {
+            throw 'Slot 6 must be empty for this baseline.'
+          }
+
+          $ports = @($node.ports)
+          if ($ports.Count -ne 6) { throw 'Expected exactly six router ports.' }
+          foreach ($adapter in 0..5) {
+            $expectedPort = "FastEthernet$adapter/0"
+            $matches = @($ports | Where-Object {
+              $_.name -ceq $expectedPort -and $_.link_type -eq 'ethernet' -and
+              $_.adapter_number -eq $adapter -and $_.port_number -eq 0
+            })
+            if ($matches.Count -ne 1) { throw "Missing or incorrect Ethernet port: $expectedPort" }
+            Write-Output "Verified: $expectedPort"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($node.properties.idlepc)) {
+            Write-Warning 'R1 has no Idle-PC value configured. Check idle CPU usage before scaling to four Dynamips routers.'
+          }
+
+          @(
+            '## R1 hardware baseline passed'
+            ''
+            "- Project: $($project.name)"
+            '- GNS3 VM: connected'
+            '- R1: started on the VM, c7200, 512 MiB RAM'
+            '- Adapters: six FastEthernet ports, slot 6 empty'
+            ''
+            'GET requests only. No adapters, templates, running states or IOS settings were changed.'
+            'This verifies GNS3 hardware metadata; it does not prove IOS is ready, interfaces are up, or packets can pass.'
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

@@ -6,7 +6,11 @@ will provide controlled automation and evidence of lab state.
 
 ## Current stage
 
-Only the manual two-PC foundation has been demonstrated. The four-router
+The two-PC foundation has passed manual bidirectional ping tests and the
+GitHub Actions foundation check (reported by the user). A single c7200 has
+also booted successfully with IOS 15.3(3)XB12 and six FastEthernet ports.
+Its automated router check is prepared locally but has not yet run on the
+real runner. The four-router
 network, security stack, AWS connection, deployment automation, and rollback
 are planned work, not implemented features.
 
@@ -85,10 +89,35 @@ On GitHub:
 - **PC not started on VM:** check the device name, compute placement, and
   running state in GNS3.
 
+## Router hardware check
+
+`.github/workflows/gns3-router-check.yml` adds the manually triggered
+**GNS3 router check**. It targets the separate router test project:
+
+- Project ID: `7b095e33-a5df-43c0-818c-ccb01e8847d5`
+- R1 node ID: `812c3358-55d9-4e22-8aac-23f4eab1b483`
+- Compute: `vm`; emulator: Dynamips; platform: c7200; RAM: 512 MiB
+- Slot 0: `C7200-IO-FE`; slots 1 through 5: `PA-FE-TX`; slot 6: empty
+- Ports: `FastEthernet0/0` through `FastEthernet5/0`
+
+After publishing, open Router-Boot-Test in GNS3, start R1, keep the runner
+online, then select **Actions > GNS3 router check > Run workflow** on GitHub.
+The foundation project does not need to be open for this separate check.
+
+The workflow only reads the API. It fails on unexpected hardware rather
+than replacing adapters or restarting R1. A green result proves the
+expected metadata, not IOS readiness or working packet forwarding. The
+manual console test separately established that IOS booted.
+
+The supplied router metadata has an empty Idle-PC value. The workflow
+warns about this; check CPU usage at idle before adding multiple routers.
+No managed switch image is installed yet, so VLAN, RSTP and LACP experiments
+still require a suitable switching device.
+
 ## Next milestones
 
-1. Run the read-only workflow successfully on the friend's runner.
-2. Inventory available, authorized router and switch images.
+1. Run the router hardware check successfully on the friend's runner.
+2. Verify router idle CPU usage and obtain a suitable managed switch image.
 3. Build and validate the four-router LAN and its addressing.
 4. Add controlled configuration automation and connectivity verification.
 5. Add routing experiments, QoS measurements, Suricata, Wazuh and Zabbix.
