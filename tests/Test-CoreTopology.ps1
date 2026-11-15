@@ -19,6 +19,10 @@ function Reset-MockLab {
         writes = [System.Collections.Generic.List[object]]::new()
         failNodeName = ''
         connected = $true
+        startMode = 'immediate'
+        pendingStartIds = [System.Collections.Generic.List[string]]::new()
+        pollsSinceStart = 0
+        simulatedSleeps = 0
     }
     # These baseline projects must never be modified.
     $global:CoreTopologyMock.projects.Add([pscustomobject]@{
@@ -40,7 +44,21 @@ function Invoke-RestMethod {
             # Keep that shape, including empty and single-item arrays.
             '/v2/computes' { return ,@([pscustomobject]@{ compute_id = 'vm'; connected = $state.connected }) }
             '/v2/projects' { return ,($state.projects.ToArray()) }
-            "/v2/projects/$managedId/nodes" { return ,($state.nodes.ToArray()) }
+            "/v2/projects/$managedId/nodes" {
+                if ($state.pendingStartIds.Count -gt 0) {
+                    $state.pollsSinceStart++
+                    if ($state.startMode -eq 'delayed' -and $state.pollsSinceStart -ge 3) {
+                        foreach ($node in $state.nodes) {
+                            if ($node.node_id -in $state.pendingStartIds) { $node.status = 'started' }
+                        }
+                        $state.pendingStartIds.Clear()
+                    }
+                    if ($state.startMode -eq 'drops-back' -and $state.pollsSinceStart -ge 2) {
+                        $state.nodes[0].status = 'stopped'
+                    }
+                }
+                return ,($state.nodes.ToArray())
+            }
             "/v2/projects/$managedId/links" { return ,($state.links.ToArray()) }
             default { throw "Mock rejected unexpected GET $path" }
         }
@@ -95,15 +113,22 @@ function Invoke-RestMethod {
         $idToStart = $Matches[1]
         $node = @($state.nodes | Where-Object { $_.node_id -eq $idToStart })
         Assert-True ($node.Count -eq 1) 'Start requested for unknown router'
-        $node[0].status = 'started'
+        if ($state.startMode -in @('immediate', 'drops-back')) { $node[0].status = 'started' }
+        if ($state.startMode -ne 'immediate') { $state.pendingStartIds.Add($idToStart) }
         $state.writes.Add($path)
         return $node[0]
     }
     throw "Mock rejected unexpected POST $path"
 }
 
-function Invoke-Deployment([string] $Mode = 'apply', [switch] $Start) {
-    & $deployScript -ManifestPath $manifestPath -Mode $Mode -StartRouters:$Start | Out-Null
+function Start-Sleep {
+    param($Milliseconds)
+    # Keep status-polling tests deterministic and fast. Production uses the real cmdlet.
+    $global:CoreTopologyMock.simulatedSleeps++
+}
+
+function Invoke-Deployment([string] $Mode = 'apply', [switch] $Start, [int] $StartupTimeoutSeconds = 120) {
+    & $deployScript -ManifestPath $manifestPath -Mode $Mode -StartRouters:$Start -StartupTimeoutSeconds $StartupTimeoutSeconds | Out-Null
 }
 
 function Assert-RejectedWithoutWrites([string] $Label) {
@@ -229,6 +254,25 @@ try {
         name = 'Hybrid-Core-Lab'; project_id = [guid]::NewGuid().ToString(); status = 'opened'
     })
     Assert-RejectedWithoutWrites 'project name collision'
+
+    Reset-MockLab
+    $global:CoreTopologyMock.startMode = 'delayed'
+    Invoke-Deployment -Start
+    Assert-True ($global:CoreTopologyMock.pollsSinceStart -ge 3) 'Delayed startup must be polled'
+    Assert-True ($global:CoreTopologyMock.simulatedSleeps -ge 4) 'Three stable started observations are required'
+    Assert-True ($global:CoreTopologyMock.writes.Count -eq 14) 'Delayed startup must issue only one start per router'
+    Write-Output 'PASS: delayed status updates succeed without duplicate start requests'
+
+    foreach ($startupMode in @('never-starts', 'drops-back')) {
+        Reset-MockLab
+        $global:CoreTopologyMock.startMode = $startupMode
+        $failureMessage = ''
+        try { Invoke-Deployment -Start -StartupTimeoutSeconds 9 } catch { $failureMessage = $_.Exception.Message }
+        Assert-True ($failureMessage -like '*R1=stopped*') 'Startup failure must report the affected router and state'
+        Assert-True ($global:CoreTopologyMock.writes.Count -eq 14) 'Startup failure must not retry start or delete devices'
+        Assert-True ($global:CoreTopologyMock.pollsSinceStart -le 6) 'Polling must be bounded, including final evidence collection'
+        Write-Output "PASS: $startupMode fails with router diagnostics and no restart loop"
+    }
     Write-Output 'All core topology tests passed.'
 }
 finally {

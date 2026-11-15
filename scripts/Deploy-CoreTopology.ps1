@@ -4,6 +4,7 @@ param(
     [string] $ApiBaseUrl = 'http://127.0.0.1:3076',
     [string] $ManifestPath = (Join-Path $PSScriptRoot '../gns3/core-topology.json'),
     [switch] $StartRouters,
+    [ValidateRange(1, 600)][int] $StartupTimeoutSeconds = 120,
     [string] $EvidenceDirectory
 )
 
@@ -218,15 +219,53 @@ try {
     Assert-State $nodes $links
     if ($nodes.Count -ne 4 -or $links.Count -ne 5) { throw 'Deployment did not produce four routers and five links.' }
     if ($StartRouters) {
+        $startResponses = @()
         foreach ($node in $nodes) {
             if ($node.status -ne 'started') {
                 Write-Output "Starting $($node.name)"
-                $null = Invoke-Gns3 POST "$projectPath/nodes/$($node.node_id)/start"
+                $startResponse = Invoke-Gns3 POST "$projectPath/nodes/$($node.node_id)/start"
+                $startResponses += [pscustomobject]@{
+                    name = $node.name; node_id = $node.node_id
+                    response_status = $startResponse.status
+                    timestamp_utc = [datetime]::UtcNow.ToString('o')
+                }
+                Write-Output "Start response for $($node.name): $($startResponse.status)"
+                Save-Evidence 'start-responses.json' $startResponses
             }
         }
-        $nodes = @(Invoke-Gns3 GET "$projectPath/nodes")
-        Assert-State $nodes $links
-        if (@($nodes | Where-Object { $_.status -ne 'started' }).Count -gt 0) { throw 'Not all routers are started.' }
+        # Start acknowledgement and controller status updates may not coincide.
+        # Observe status without issuing repeated start requests or restarting nodes.
+        $startupTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        $maxChecks = [int][math]::Ceiling($StartupTimeoutSeconds / 3.0) + 1
+        $stableChecks = 0
+        $startupReady = $false
+        $statusHistory = @()
+        for ($check = 1; $check -le $maxChecks; $check++) {
+            $nodes = @(Invoke-Gns3 GET "$projectPath/nodes")
+            Assert-State $nodes $links
+            if ($nodes.Count -ne 4) { throw 'A router disappeared while checking startup.' }
+            $statusText = ($nodes | ForEach-Object { "$($_.name)=$($_.status)" }) -join ', '
+            Write-Output "Startup check ${check}: $statusText"
+            $statusHistory += [pscustomobject]@{
+                timestamp_utc = [datetime]::UtcNow.ToString('o')
+                nodes = @($nodes | Select-Object name, node_id, status, console_host, console)
+            }
+            Save-Evidence 'startup-status.json' $statusHistory
+            if (@($nodes | Where-Object { $_.status -ne 'started' }).Count -eq 0) {
+                $stableChecks++
+                if ($stableChecks -ge 3) { $startupReady = $true; break }
+            }
+            else { $stableChecks = 0 }
+            $remainingSeconds = $StartupTimeoutSeconds - $startupTimer.Elapsed.TotalSeconds
+            if ($check -eq $maxChecks -or $remainingSeconds -le 0) { break }
+            Start-Sleep -Milliseconds ([int][math]::Min(3000, $remainingSeconds * 1000))
+        }
+        if (-not $startupReady) {
+            $details = ($nodes | ForEach-Object {
+                "$($_.name)=$($_.status) (console $($_.console_host):$($_.console))"
+            }) -join '; '
+            throw "Router startup did not reach three consecutive all-started checks within the polling window. Last state: $details. Inspect startup-status.json, after.json, the affected router consoles and GNS3 server logs. No automatic restart was attempted."
+        }
     }
     Write-Output 'VERIFIED: four routers, five Ethernet links, and the expected adapters and Idle-PC.'
     Write-Output 'No IP addresses or routing protocols have been configured. API started status does not prove IOS finished booting.'

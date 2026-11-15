@@ -170,6 +170,21 @@ Workflow artifacts contain `plan.json`, `before.json`, and, for apply,
 partial state too. The files are evidence of API state, not packet captures
 or proof of routing. Local `artifacts/` outputs are excluded from Git.
 
+When starting routers, the deployment records `start-responses.json` and
+polls the controller for roughly two minutes, requiring three consecutive
+all-started observations. `startup-status.json` records each observation,
+including per-router status and console address. HTTP request time can
+extend the polling duration. A delayed update is tolerated; a router that
+remains stopped or stops again causes a failure with its last known state.
+Start requests are not retried automatically, and routers already started
+are not restarted. This check still does not verify IOS boot completion.
+
+If startup fails, keep the project. Inspect `startup-status.json` and
+`after.json`, open the affected routers' consoles, and inspect the GNS3
+server logs. A start acknowledgement alone does not establish successful
+startup. If publishing a workflow fix, launch a new run on `main`; rerunning
+an old job uses that run's original commit.
+
 ### Existing state and interrupted runs
 
 The deployment creates only missing objects with the manifest's stable
