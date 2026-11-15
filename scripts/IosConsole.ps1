@@ -31,8 +31,25 @@ function ConvertFrom-IosTelnet($Session, [byte[]] $Bytes) {
     return $text.ToString()
 }
 
+function Get-IosTerminalState([string] $Text) {
+    # Dynamips may replay boot/setup history when a console reconnects.
+    # Only the current terminal tail determines whether input is required.
+    $withoutLogs = $Text -replace '(?m)^([A-Za-z0-9_.:-]+(?:\([A-Za-z0-9_-]+\))?[#>])?[^\r\n]*%(?:LINK|LINEPROTO|SYS)-\d-[^\r\n]*', '$1'
+    $tail = $withoutLogs.TrimEnd()
+    if ($tail -match '(?:^|[\r\n])([A-Za-z0-9_.:-]+(?:\([A-Za-z0-9_-]+\))?[#>])$') {
+        return [pscustomobject]@{ Kind = 'prompt'; Prompt = $Matches[1]; Detail = '' }
+    }
+    $lastLine = ($tail -split '[\r\n]')[-1].Trim()
+    if ($lastLine -match '(?i)^(Username|Password):$' -or
+        $lastLine -match '(?i)(initial configuration dialog|terminate autoinstall).*:\s*$|Press RETURN to get started[!.]?\s*$') {
+        return [pscustomobject]@{ Kind = 'challenge'; Prompt = ''; Detail = $lastLine }
+    }
+    return [pscustomobject]@{ Kind = 'waiting'; Prompt = ''; Detail = $lastLine }
+}
+
 function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutSeconds = 30) {
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    $quietTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $buffer = [byte[]]::new(8192)
     $text = [System.Text.StringBuilder]::new()
     while ($timer.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
@@ -40,22 +57,23 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
             $read = $Session.Stream.Read($buffer, 0, $buffer.Length)
             if ($read -eq 0) { throw 'The router console closed its connection.' }
             [void]$text.Append((ConvertFrom-IosTelnet $Session $buffer[0..($read - 1)]))
+            $quietTimer.Restart()
             if ($text.Length -gt 2097152) { throw 'Console output exceeded the response limit.' }
-            $plain = $text.ToString() -replace '\x1b\[[0-9;]*[A-Za-z]', ''
-            if ($plain -match '(?im)(?:^|[\r\n])\s*(Username|Password):' -or
-                $plain -match '(?i)initial configuration dialog|terminate autoinstall|Press RETURN to get started') {
-                throw 'IOS is asking for authentication or initial setup. Prepare this console manually; no credentials or setup answers were sent.'
-            }
-            $prompts = [regex]::Matches($plain, '(?m)(?:^|[\r\n])([A-Za-z0-9_.:-]+(?:\([A-Za-z0-9_-]+\))?[#>])[ \t]*(?=$|[\r\n])')
-            if ($prompts.Count -gt 0 -and (-not $ExpectedEcho -or $plain.Contains($ExpectedEcho))) {
-                $Session.Prompt = $prompts[$prompts.Count - 1].Groups[1].Value
-                return $plain
-            }
         }
         elseif ($Session.Client.Client.Poll(1000, [System.Net.Sockets.SelectMode]::SelectRead) -and $Session.Client.Available -eq 0) {
             throw 'The router console disconnected while waiting for a prompt.'
         }
-        else { Start-Sleep -Milliseconds 25 }
+        $plain = $text.ToString() -replace '\x1b\[[0-9;]*[A-Za-z]', ''
+        $terminal = Get-IosTerminalState $plain
+        if ($terminal.Kind -eq 'challenge' -and $quietTimer.ElapsedMilliseconds -ge 500) {
+            throw "IOS is currently waiting at '$($terminal.Detail)'. Prepare this console manually; no credentials or setup answers were sent."
+        }
+        if ($terminal.Kind -eq 'prompt' -and $quietTimer.ElapsedMilliseconds -ge 100 -and
+            (-not $ExpectedEcho -or $plain.Contains($ExpectedEcho))) {
+            $Session.Prompt = $terminal.Prompt
+            return $plain
+        }
+        Start-Sleep -Milliseconds 25
     }
     throw "Timed out waiting for an IOS prompt after '$ExpectedEcho'. Last output: $($text.ToString())"
 }

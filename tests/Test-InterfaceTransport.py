@@ -7,6 +7,7 @@ import json
 import socketserver
 import subprocess
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -24,6 +25,11 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
         router = self.server.router
         self.request.settimeout(15)
         self.request.sendall(bytes([255, 251, 1, 255, 253, 3]))
+        # Replay old setup text before the current prompt, in separate reads.
+        # The console reader must wait for the current terminal tail.
+        self.request.sendall(b'Would you like to enter the initial configuration dialog? [yes/no]:')
+        time.sleep(0.05)
+        self.request.sendall(b' no\r\nPress RETURN to get started!\r\nPassword:\r\nRouter#\r\n')
         line, telnet_state, mode, selected = bytearray(), "data", "", None
         while True:
             chunk = self.request.recv(8192)

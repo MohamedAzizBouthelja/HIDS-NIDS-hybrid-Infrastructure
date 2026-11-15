@@ -25,6 +25,19 @@ Assert-InterfaceTest (([System.BitConverter]::ToString($memory.ToArray())) -eq '
 $memory.Dispose()
 Write-Output 'PASS: fragmented Telnet negotiation, CR-NUL and subnegotiation'
 
+$history = "Would you like to enter the initial configuration dialog? [yes/no]: no`r`nPress RETURN to get started!`r`nUsername:`r`nPassword:`r`nRouter>"
+$terminal = Get-IosTerminalState $history
+Assert-InterfaceTest ($terminal.Kind -eq 'prompt' -and $terminal.Prompt -eq 'Router>') 'Historical setup/login text must not override the current prompt'
+Write-Output 'PASS: replayed setup and login history ends at a usable EXEC prompt'
+foreach ($activePrompt in @('Password:', 'Username:', 'Would you like to enter the initial configuration dialog? [yes/no]:', 'Would you like to terminate autoinstall? [yes]:', 'Press RETURN to get started!')) {
+    $terminal = Get-IosTerminalState ("Router#`r`n" + $activePrompt)
+    Assert-InterfaceTest ($terminal.Kind -eq 'challenge') 'A live challenge must override an earlier historical prompt'
+}
+Write-Output 'PASS: live authentication, setup and RETURN prompts are still rejected'
+$terminal = Get-IosTerminalState "R1(config-if)#*Nov 15 10:00:00: %LINK-3-UPDOWN: Interface FastEthernet0/0, changed state to up`r`n"
+Assert-InterfaceTest ($terminal.Kind -eq 'prompt' -and $terminal.Prompt -eq 'R1(config-if)#') 'A syslog line must not hide the current configuration prompt'
+Write-Output 'PASS: known syslog messages after the prompt do not hide it'
+
 function Reset-InterfaceLab {
     $global:CoreInterfaceMock = @{
         nodes = @(); links = @(); routers = @{}
