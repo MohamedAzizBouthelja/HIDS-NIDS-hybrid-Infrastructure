@@ -1,0 +1,51 @@
+name: GNS3 core topology
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Preview or create the four-router topology
+        type: choice
+        options: [plan, apply]
+        default: plan
+      start_routers:
+        description: Start stopped routers after creating and verifying the topology
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gns3-core-topology
+  cancel-in-progress: false
+
+jobs:
+  core-topology:
+    runs-on: [self-hosted, Windows, X64, gns-lab]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Test deployment logic with a simulated API
+        run: ./tests/Test-CoreTopology.ps1
+      - name: Plan or deploy core topology
+        env:
+          DEPLOY_MODE: ${{ inputs.mode }}
+          START_ROUTERS: ${{ inputs.start_routers }}
+        run: |
+          $start = $env:START_ROUTERS -eq 'true'
+          ./scripts/Deploy-CoreTopology.ps1 -Mode $env:DEPLOY_MODE -StartRouters:$start -EvidenceDirectory 'artifacts/core'
+      - name: Save topology evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: core-topology-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/core/
+          if-no-files-found: warn
+          retention-days: 7

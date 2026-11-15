@@ -9,8 +9,8 @@ will provide controlled automation and evidence of lab state.
 The two-PC foundation has passed manual bidirectional ping tests and the
 GitHub Actions foundation check (reported by the user). A single c7200 has
 also booted successfully with IOS 15.3(3)XB12 and six FastEthernet ports.
-Its automated router check is prepared locally but has not yet run on the
-real runner. The four-router
+The router hardware check also passed on the real runner (reported by the
+user), and R1's saved Idle-PC value is `0x60630338`. The four-router
 network, security stack, AWS connection, deployment automation, and rollback
 are planned work, not implemented features.
 
@@ -109,16 +109,102 @@ than replacing adapters or restarting R1. A green result proves the
 expected metadata, not IOS readiness or working packet forwarding. The
 manual console test separately established that IOS booted.
 
-The supplied router metadata has an empty Idle-PC value. The workflow
-warns about this; check CPU usage at idle before adding multiple routers.
+The initial router metadata had an empty Idle-PC value. It has since been
+set to `0x60630338`; the console remained responsive and a screenshot showed
+the GNS3 VM at about 6.3% CPU. There was no before measurement, so this does
+not quantify a CPU improvement. This value is specific to the tested image
+and must be reassessed if the image changes.
 No managed switch image is installed yet, so VLAN, RSTP and LACP experiments
 still require a suitable switching device.
 
+## Four-router topology deployment
+
+The **GNS3 core topology** workflow creates a separate project named
+`Hybrid-Core-Lab` with four c7200 routers and five Ethernet links.
+The two baseline test projects are not deployment targets.
+
+- `gns3/core-topology.json` defines project and device IDs, adapters,
+  coordinates, Idle-PC, links, and the proposed link subnets.
+- `scripts/Deploy-CoreTopology.ps1` reconciles the lab with that manifest.
+- `tests/Test-CoreTopology.ps1` tests the real deployment script against a
+  simulated API, including repeated runs, drift detection, and recovery
+  after an interrupted deployment. No extra packages are needed.
+
+| Link | First endpoint | Second endpoint | Planned subnet |
+| --- | --- | --- | --- |
+| R1-R2 | R1 FastEthernet0/0 | R2 FastEthernet0/0 | 10.0.12.0/30 |
+| R2-R4 | R2 FastEthernet1/0 | R4 FastEthernet0/0 | 10.0.24.0/30 |
+| R1-R3 | R1 FastEthernet1/0 | R3 FastEthernet0/0 | 10.0.13.0/30 |
+| R3-R4 | R3 FastEthernet1/0 | R4 FastEthernet1/0 | 10.0.34.0/30 |
+| R1-R4 | R1 FastEthernet2/0 | R4 FastEthernet2/0 | 10.0.14.0/30 |
+
+The manifest's subnet labels are documentation only at this stage. The
+script does not configure IOS hostnames, IP addresses, interface activation,
+OSPF, EIGRP, or any other IOS settings. Interface shutdown status is
+expected until the configuration milestone. API state `started` confirms
+the emulator process state, not completion of IOS boot or connectivity.
+
+### Run the deployment
+
+After committing and pushing the files:
+
+1. Keep GNS3, its VM, and the runner running on the friend's PC. The tested
+   IOS image must remain installed on compute `vm`. The old test projects
+   can be closed; this workflow does not depend on them being open.
+2. In GitHub Actions, select **GNS3 core topology > Run workflow**.
+3. First select **mode: plan**. Leave **start_routers** unchecked. The job
+   only reads the API and records what would be created.
+4. Inspect the plan: on the first run it should list one new project, four
+   routers, and five links.
+5. Run again with **mode: apply**. Check **start_routers** to start the four
+   routers after the topology has been verified. Leaving it unchecked
+   creates missing routers in the stopped state and preserves the running
+   state of existing routers.
+6. Open `Hybrid-Core-Lab` from GNS3's project list. If it does not appear
+   immediately, refresh or reopen the project-selection dialog.
+7. Repeat **apply** with the same settings to prove idempotence. The plan
+   should show no new routers or links, and started routers are not restarted.
+
+Workflow artifacts contain `plan.json`, `before.json`, and, for apply,
+`after.json`. They are kept for seven days. Failed runs attempt to save the
+partial state too. The files are evidence of API state, not packet captures
+or proof of routing. Local `artifacts/` outputs are excluded from Git.
+
+### Existing state and interrupted runs
+
+The deployment creates only missing objects with the manifest's stable
+IDs. It does not clone the source router's MAC address or Dynamips runtime
+ID; GNS3 assigns those identities. It does not modify templates, replace
+adapters on existing devices, stop routers, or delete anything.
+
+Unexpected devices, duplicate names, incorrect adapters, an unset/wrong
+Idle-PC value, project name/ID collisions, and unexpected or impaired links
+cause a failure. Resolve the mismatch before rerunning. A closed target
+project must be opened explicitly in GNS3; the workflow does not open it,
+because doing so could trigger an existing auto-start setting.
+
+An interrupted deployment may leave a partial project. There is no automatic
+rollback: deleting partially created routers could lose later configuration.
+Inspect the evidence, resolve the cause, and rerun **plan**, then **apply**
+to add only what is missing. Do not manually recreate the target project
+under the same name with a different ID. Avoid editing the target lab while
+the deployment is running.
+
+For a local simulated test on Windows PowerShell:
+
+```powershell
+.\tests\Test-CoreTopology.ps1
+```
+
+The new deployment workflow has been tested with a simulated API. A live
+deployment on the friend's GNS3 is still required before claiming the
+four-router lab exists or that a repeat deployment is idempotent there.
+
 ## Next milestones
 
-1. Run the router hardware check successfully on the friend's runner.
-2. Verify router idle CPU usage and obtain a suitable managed switch image.
-3. Build and validate the four-router LAN and its addressing.
+1. Run the core deployment in plan mode, then apply, then repeat apply.
+2. Verify boot and CPU usage with all four routers and obtain a suitable managed switch image.
+3. Automate and validate router interface addresses and the four-router LAN.
 4. Add controlled configuration automation and connectivity verification.
 5. Add routing experiments, QoS measurements, Suricata, Wazuh and Zabbix.
 6. Add AWS and end-to-end VPN validation.
@@ -131,4 +217,7 @@ the routed paths used for network measurements.
 ## References
 
 - [GNS3 API endpoints](https://api.gns3.net/en/latest/endpoints.html)
+- [GNS3 project creation](https://api.gns3.net/en/stable/api/v2/controller/project/projects.html)
+- [GNS3 node creation](https://api.gns3.net/en/stable/api/v2/controller/node/projectsprojectidnodes.html)
+- [GNS3 link creation](https://api.gns3.net/en/2.2/api/v2/controller/link/projectsprojectidlinks.html)
 - [Manually running GitHub workflows](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
