@@ -1,0 +1,21 @@
+{
+  "process_id": 10,
+  "area": 0,
+  "router_ids": {
+    "R1": "10.255.0.1",
+    "R2": "10.255.0.2",
+    "R3": "10.255.0.3",
+    "R4": "10.255.0.4"
+  },
+  "link_costs": {
+    "10.0.12.0/30": 10,
+    "10.0.24.0/30": 10,
+    "10.0.13.0/30": 30,
+    "10.0.34.0/30": 30,
+    "10.0.14.0/30": 100
+  },
+  "primary_routes": [
+    {"router": "R1", "destination": "10.255.0.4", "next_hop": "10.0.12.2", "interface": "FastEthernet0/0"},
+    {"router": "R4", "destination": "10.255.0.1", "next_hop": "10.0.24.1", "interface": "FastEthernet0/0"}
+  ]
+}

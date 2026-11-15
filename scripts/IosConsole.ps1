@@ -95,7 +95,10 @@ function Send-IosCommand($Session, [string] $Command, [int] $TimeoutSeconds = 30
     $bytes = [System.Text.Encoding]::ASCII.GetBytes("$Command`r")
     $Session.Stream.Write($bytes, 0, $bytes.Length)
     $output = Read-IosResponse $Session -ExpectedEcho $Command -TimeoutSeconds $TimeoutSeconds
-    if ($output -match '(?im)^\s*%(?!LINK-\d|LINEPROTO-\d|SYS-\d)') {
+    $errors = [regex]::Matches($output, '(?im)^\s*%(?!LINK-\d|LINEPROTO-\d|SYS-\d)[^\r\n]*')
+    foreach ($errorLine in $errors) {
+        # A missing route is a valid show result while OSPF is converging.
+        if ($Command -match '^show ip route [0-9.]+$' -and $errorLine.Value.Trim() -match '^% Network not in table\.?$') { continue }
         throw "IOS rejected '$Command': $output"
     }
     return $output

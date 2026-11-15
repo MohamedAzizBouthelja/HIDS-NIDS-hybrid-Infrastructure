@@ -1,9 +1,10 @@
-"""Local integration test: real HTTP JSON and Telnet sockets, simulated IOS.
+"""Interface/OSPF integration: real HTTP JSON and Telnet, simulated IOS.
 
 Uses Python's standard library and Windows PowerShell. Does not contact GNS3.
 The GitHub workflow uses the dependency-free PowerShell tests instead.
 """
 import json
+import heapq
 import socketserver
 import subprocess
 import threading
@@ -14,9 +15,47 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = json.loads((ROOT / "gns3/core-topology.json").read_text())
+OSPF = json.loads((ROOT / "gns3/ospf.json").read_text())
 PROJECT_ID = MANIFEST["project"]["project_id"]
 POWERSHELL = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 COUNTERS = dict(opens=0, changes=0, saves=0, measured_pings=0, wake_returns=0)
+ROUTERS = {}
+
+
+def all_ospf_configured():
+    for name, router in ROUTERS.items():
+        loop = router["interfaces"].get("Loopback0", {})
+        if (router["router_id"] != OSPF["router_ids"][name] or not router["passive"]
+                or loop.get("address") != router["router_id"] or not loop.get("ospf")):
+            return False
+    for link in MANIFEST["links"]:
+        for side in ("a", "b"):
+            router = ROUTERS[link[side]]
+            name = f'FastEthernet{link[f"{side}_adapter"]}/0'
+            interface = router["interfaces"][name]
+            if (not interface.get("ospf") or interface.get("cost") != OSPF["link_costs"][link["subnet"]]
+                    or interface.get("network") != "point-to-point" or name not in router["active"]):
+                return False
+    return True
+
+
+def route_next_hop(source, destination):
+    graph = {name: [] for name in ROUTERS}
+    for link in MANIFEST["links"]:
+        cost = OSPF["link_costs"][link["subnet"]]
+        graph[link["a"]].append((link["b"], cost, link["b_ip"], f'FastEthernet{link["a_adapter"]}/0'))
+        graph[link["b"]].append((link["a"], cost, link["a_ip"], f'FastEthernet{link["b_adapter"]}/0'))
+    queue, visited = [(0, source, "", "")], set()
+    while queue:
+        cost, name, first_hop, first_interface = heapq.heappop(queue)
+        if name in visited:
+            continue
+        visited.add(name)
+        if name == destination:
+            return first_hop, first_interface, cost + 1
+        for peer, weight, next_hop, interface in graph[name]:
+            heapq.heappush(queue, (cost + weight, peer, first_hop or next_hop, first_interface or interface))
+    raise AssertionError("Simulated topology is disconnected")
 
 
 class ConsoleHandler(socketserver.BaseRequestHandler):
@@ -67,6 +106,13 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
                     pass
                 elif command == "show running-config | include ^hostname":
                     body = "hostname " + router["hostname"] + "\r\n"
+                elif command == "show running-config | section ^router":
+                    if router["process"]:
+                        body = f'router ospf 10\r\n router-id {router["router_id"]}\r\n log-adjacency-changes\r\n'
+                        if router["passive"]:
+                            body += ' passive-interface default\r\n'
+                        for interface in sorted(router["active"]):
+                            body += f' no passive-interface {interface}\r\n'
                 elif command.startswith("show running-config interface "):
                     name = command.split()[-1]
                     config = router["interfaces"][name]
@@ -74,6 +120,12 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
                     body += (" ip address " + config["address"] + " " + config["mask"] if config["address"] else " no ip address") + "\r\n"
                     if config["shutdown"]:
                         body += " shutdown\r\n"
+                    if config.get("ospf"):
+                        body += ' ip ospf 10 area 0\r\n'
+                    if config.get("network"):
+                        body += f' ip ospf network {config["network"]}\r\n'
+                    if config.get("cost"):
+                        body += f' ip ospf cost {config["cost"]}\r\n'
                     body += " duplex auto\r\n speed auto\r\nend\r\n"
                 elif command == "configure terminal":
                     mode = "(config)"
@@ -82,6 +134,9 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
                     COUNTERS["changes"] += 1
                 elif command.startswith("interface "):
                     selected, mode = command.split()[1], "(config-if)"
+                    if selected not in router["interfaces"]:
+                        router["interfaces"][selected] = dict(address="", mask="", shutdown=True)
+                        COUNTERS["changes"] += 1
                 elif command.startswith("ip address "):
                     _, _, address, mask = command.split()
                     router["interfaces"][selected].update(address=address, mask=mask)
@@ -89,6 +144,27 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
                 elif command == "no shutdown":
                     router["interfaces"][selected]["shutdown"] = False
                     COUNTERS["changes"] += 1
+                elif command == 'ip ospf 10 area 0':
+                    router['interfaces'][selected]['ospf'] = True
+                    router['process'] = True
+                    COUNTERS['changes'] += 1
+                elif command == 'ip ospf network point-to-point':
+                    router['interfaces'][selected]['network'] = 'point-to-point'
+                    COUNTERS['changes'] += 1
+                elif command.startswith('ip ospf cost '):
+                    router['interfaces'][selected]['cost'] = int(command.split()[-1])
+                    COUNTERS['changes'] += 1
+                elif command == 'router ospf 10':
+                    router['process'], mode, selected = True, '(config-router)', None
+                elif command.startswith('router-id '):
+                    router['router_id'] = command.split()[-1]
+                    COUNTERS['changes'] += 1
+                elif command == 'passive-interface default':
+                    router['passive'] = True
+                    COUNTERS['changes'] += 1
+                elif command.startswith('no passive-interface '):
+                    router['active'].add(command.split()[-1])
+                    COUNTERS['changes'] += 1
                 elif command == "exit":
                     mode = "(config)"
                 elif command == "end":
@@ -99,6 +175,22 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
                         address = config["address"] or "unassigned"
                         status, protocol = ("administratively down", "down") if config["shutdown"] else ("up", "up")
                         body += f"{name:<26} {address:<15} YES manual {status:<21} {protocol}\r\n"
+                elif command == 'show ip ospf neighbor':
+                    body = 'Neighbor ID Pri State Dead Time Address Interface\r\n'
+                    for link in MANIFEST['links']:
+                        for side, other in (('a', 'b'), ('b', 'a')):
+                            if link[side] == self.server.name:
+                                state = 'FULL/-' if all_ospf_configured() else 'INIT/-'
+                                body += f'{OSPF["router_ids"][link[other]]} 0 {state} 00:00:37 {link[f"{other}_ip"]} FastEthernet{link[f"{side}_adapter"]}/0\r\n'
+                elif command.startswith('show ip route '):
+                    COUNTERS['route_reads'] = COUNTERS.get('route_reads', 0) + 1
+                    destination = command.split()[-1]
+                    remote = next(name for name, address in OSPF['router_ids'].items() if address == destination)
+                    hop, interface, metric = route_next_hop(self.server.name, remote)
+                    if COUNTERS['route_reads'] == 1:
+                        body = '% Network not in table\r\n'
+                    else:
+                        body = f'Routing entry for {destination}/32\r\n Known via "ospf 10", distance 110, metric {metric}, type intra area\r\n * {hop}, from {destination}, 00:00:03 ago, via {interface}\r\n Route metric is {metric}\r\n'
                 elif command.startswith("ping "):
                     if "repeat 3" in command:
                         COUNTERS["measured_pings"] += 1
@@ -122,7 +214,10 @@ def main():
     by_name = {router["name"]: router for router in MANIFEST["routers"]}
     for router in MANIFEST["routers"]:
         server = ConsoleServer(("127.0.0.1", 0), ConsoleHandler)
-        server.router = dict(hostname="Router", interfaces={f"FastEthernet{i}/0": dict(address="", mask="", shutdown=True) for i in range(6)})
+        server.name = router['name']
+        server.router = dict(hostname="Router", process=False, router_id='', passive=False, active=set(),
+                             interfaces={f"FastEthernet{i}/0": dict(address="", mask="", shutdown=True) for i in range(6)})
+        ROUTERS[router['name']] = server.router
         servers.append(server)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         nodes.append(dict(name=router["name"], node_id=router["node_id"], project_id=PROJECT_ID,
@@ -172,6 +267,29 @@ def main():
         assert len(evidence) == 10 and all(record["passed"] for record in evidence)
         print("PASS: repeat apply makes no configuration changes; ten measured ping records saved")
         print("PASS: each console receives RETURN after its ready message, including on reconnect")
+        first_ospf_change_count = None
+        for mode in ('plan', 'apply', 'apply'):
+            previous_changes = COUNTERS['changes']
+            command = [POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+                       str(ROOT / 'scripts/Configure-CoreOspf.ps1'), '-Mode', mode,
+                       '-ApiBaseUrl', f'http://127.0.0.1:{api.server_port}',
+                       '-EvidenceDirectory', str(ROOT / 'artifacts/ospf-integration')]
+            result = subprocess.run(command, capture_output=True, text=True, errors='replace', timeout=180)
+            assert result.returncode == 0, (result.stdout, result.stderr)
+            if mode == 'plan':
+                assert COUNTERS['changes'] == previous_changes
+                print('PASS: OSPF entry-point plan changes no configuration')
+            elif first_ospf_change_count is None:
+                first_ospf_change_count = COUNTERS['changes']
+                assert all_ospf_configured()
+                print('PASS: OSPF entry-point apply configures and verifies the simulated network over real HTTP/TCP')
+            else:
+                assert COUNTERS['changes'] == first_ospf_change_count
+                print('PASS: OSPF repeat apply changes no configuration')
+        assert COUNTERS['measured_pings'] == 44 and COUNTERS['saves'] == 16, COUNTERS
+        routes = json.loads((ROOT / 'artifacts/ospf-integration/routes.json').read_text(encoding='utf-8-sig'))
+        assert len(routes) == 12 and all(route['valid'] for route in routes)
+        print('PASS: twelve OSPF route records saved, including unique primary paths through R2')
     finally:
         for server in servers:
             server.shutdown()

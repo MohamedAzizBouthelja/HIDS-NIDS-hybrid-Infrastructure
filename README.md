@@ -13,9 +13,10 @@ The router hardware check also passed on the real runner (reported by the
 user), and R1's saved Idle-PC value is `0x60630338`. The core deployment
 has created four routers and five links in Hybrid-Core-Lab. A supplied API
 artifact showed all four routers started, and the user confirmed their IOS
-consoles reached a prompt. IP configuration, routing, the security stack,
-AWS and rollback verification are still pending. Interface automation is
-prepared locally and requires its first live run.
+consoles reached a prompt. The interface workflow then passed all ten
+directional neighbor ping tests and saved all four configurations (reported
+by the user). OSPF automation is prepared locally and requires its first
+live run. The security stack, AWS and rollback verification remain pending.
 
 | Component | Location | Observed configuration |
 | --- | --- | --- |
@@ -272,8 +273,10 @@ pass does it issue `write memory` on the four routers and require `[OK]`.
 Artifacts are retained for seven days and include the address plan,
 pre-change hostname/interface backups, pending commands, console transcript,
 and ping results. Backups cover the managed hostname and interfaces, not
-the entire router configuration. The first live apply is still pending;
-simulated tests do not establish that real network connectivity works.
+the entire router configuration. The user confirmed a successful live
+apply with all ten measured directional tests passing and configurations
+saved. Repeat-apply behavior is covered by simulated tests and still needs
+its own live confirmation.
 
 There is no automatic rollback. A failed apply may leave some running
 configuration changed. Configurations are not saved by this run until all
@@ -301,15 +304,108 @@ python tests/Test-InterfaceTransport.py
 
 It runs the actual PowerShell entry point against local HTTP and TCP
 servers that simulate the GNS3 API and four IOS consoles. It checks plan,
-apply, repeat apply, and generated ping evidence. It never contacts the
-real lab. The GitHub workflow does not require Python or run this test.
+apply, repeat apply, generated ping evidence, and the OSPF entry point. It
+never contacts the real lab. The GitHub workflow does not require Python
+or run this test.
+
+## OSPF baseline
+
+The **GNS3 core OSPF** workflow adds OSPF process 10 in area 0 to the
+existing core. `gns3/ospf.json` defines the router IDs, link costs and the
+required primary next hops. It does not enable EIGRP or perform failover.
+
+Each router receives Loopback0 with a /32 address, also used as its OSPF
+router ID:
+
+| Router | Loopback0 and router ID |
+| --- | --- |
+| R1 | 10.255.0.1 |
+| R2 | 10.255.0.2 |
+| R3 | 10.255.0.3 |
+| R4 | 10.255.0.4 |
+
+Loopback addresses provide remote test destinations that require routing,
+rather than only testing the directly connected /30 links.
+
+| Path between R1 and R4 | Link costs | Total transit cost |
+| --- | --- | --- |
+| R1-R2-R4 | 10 + 10 | 20 |
+| R1-R3-R4 | 30 + 30 | 60 |
+| R1-R4 | 100 | 100 |
+
+Costs are symmetric. The destination loopback's own OSPF cost is added to
+the installed route metric, so the primary loopback route normally has
+metric 21 rather than 20. The comparison between transit paths stays the
+same. R2 and R3 can have equal-cost routes to each other through R1/R4;
+the workflow requires a unique next hop through R2 specifically for the
+R1-to-R4 and R4-to-R1 loopback routes.
+
+Physical core links use the OSPF point-to-point network type. The process
+has `passive-interface default`, with only the known inter-router ports
+made non-passive. Loopback0 is advertised without forming neighbors.
+The explicit router ID is configured before OSPF is enabled on interfaces.
+
+### Run OSPF
+
+1. Keep the existing core project open, all routers started and their
+   interfaces configured. Close interactive console windows.
+2. Publish the files. Run **GNS3 core OSPF** with **mode: plan** first.
+   This validates API topology and prints the intended configuration. It
+   does not open consoles or check existing IOS routing configuration.
+3. Review the plan, then run **mode: apply**.
+4. Allow time for neighbors and routes to converge. Inspect the job logs
+   and artifacts if convergence does not complete.
+
+Before changing any router, apply checks all four consoles and backs up
+their router sections, affected physical interface configurations and any
+existing Loopback0. It requires the existing link IPs and masks to match
+the foundation and the endpoints to be up/up. It rejects EIGRP/other
+routing processes, conflicting loopbacks, differing explicit router IDs,
+different existing OSPF costs/network types, and additional routing policy.
+No routing process is cleared, removed, or automatically redistributed.
+
+Matching OSPF configuration lines are skipped on repeated apply. After
+configuration, verification requires:
+
+1. Two consecutive observations of every expected neighbor in FULL state:
+   three on R1, two on R2, two on R3 and three on R4 (ten directional
+   observations across five unique adjacencies).
+2. Each of the twelve remote loopback /32 routes learned through OSPF 10.
+   A static or less-specific route does not satisfy this check.
+3. R1's route to 10.255.0.4 has the sole next hop 10.0.12.2 through
+   FastEthernet0/0; R4's route to 10.255.0.1 has the sole next hop
+   10.0.24.1 through FastEthernet0/0. These are control-plane checks of
+   selected primary next hops, not traceroute or packet-capture evidence.
+4. Twelve loopback-source ping tests return 3/3 replies, after separate
+   single-packet warm-ups.
+5. All four routers acknowledge `write memory` with `[OK]`.
+
+The workflow records `ospf-plan.json`, `before-ospf.json`,
+`pending-commands.json`, `neighbors.json`, `routes.json`,
+`loopback-pings.json` and `console-transcript.json`, retained for seven
+days. Backups cover only the inspected configuration sections. A failed
+apply can leave some running configuration changed; there is no automated
+rollback. Saving happens after verification, but a failure during saving
+can leave only some routers saved. Inspect artifacts before resuming.
+
+The new workflow is tested with simulated IOS state and actual local
+HTTP/Telnet connections. The first live OSPF apply remains pending. Backup
+path availability, convergence time under failure, traceroute and packet
+captures require a later, separately triggered experiment. No ordinary
+OSPF deployment cuts links.
+
+For the dependency-free OSPF tests on Windows PowerShell:
+
+```powershell
+.\tests\Test-CoreOspf.ps1
+```
 
 ## Next milestones
 
-1. Complete a successful repeated core deployment with stable startup checks.
-2. Run the interface workflow in plan mode, then apply, then repeat apply.
-3. Add and verify OSPF routing with explicit path costs.
-4. Obtain a suitable managed switch image and implement the VLAN/access network.
+1. Run the OSPF workflow in plan mode, then apply, then repeat apply.
+2. Collect baseline route and traceroute evidence before a controlled failover experiment.
+3. Obtain a suitable managed switch image and implement the VLAN/access network.
+4. Compare OSPF and EIGRP in separate routing campaigns.
 5. Add routing experiments, QoS measurements, Suricata, Wazuh and Zabbix.
 6. Add AWS and end-to-end VPN validation.
 
@@ -326,4 +422,6 @@ the routed paths used for network measurements.
 - [GNS3 link creation](https://api.gns3.net/en/2.2/api/v2/controller/link/projectsprojectidlinks.html)
 - [Cisco IPv4 interface configuration](https://www.cisco.com/c/en/us/td/docs/routers/ios-xe/ip-addressing/ip-addressing/m_config-ipv4-addr-0.html)
 - [Cisco configuration save commands](https://www.cisco.com/c/en/us/td/docs/ios/fundamentals/command/Cisco_IOS_Configuration_Fundamentals_Command_Reference/C_commands.html)
+- [Cisco OSPF neighbor command reference](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_ospf/command/iro-cr-book/ospf-s1.html)
+- [Cisco ping command reference](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/fundamentals/command/Cisco_IOS_Configuration_Fundamentals_Command_Reference/monitor_event-trace_through_Q.html)
 - [Manually running GitHub workflows](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
