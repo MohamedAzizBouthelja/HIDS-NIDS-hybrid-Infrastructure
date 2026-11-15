@@ -10,9 +10,12 @@ The two-PC foundation has passed manual bidirectional ping tests and the
 GitHub Actions foundation check (reported by the user). A single c7200 has
 also booted successfully with IOS 15.3(3)XB12 and six FastEthernet ports.
 The router hardware check also passed on the real runner (reported by the
-user), and R1's saved Idle-PC value is `0x60630338`. The four-router
-network, security stack, AWS connection, deployment automation, and rollback
-are planned work, not implemented features.
+user), and R1's saved Idle-PC value is `0x60630338`. The core deployment
+has created four routers and five links in Hybrid-Core-Lab. A supplied API
+artifact showed all four routers started, and the user confirmed their IOS
+consoles reached a prompt. IP configuration, routing, the security stack,
+AWS and rollback verification are still pending. Interface automation is
+prepared locally and requires its first live run.
 
 | Component | Location | Observed configuration |
 | --- | --- | --- |
@@ -211,16 +214,100 @@ For a local simulated test on Windows PowerShell:
 .\tests\Test-CoreTopology.ps1
 ```
 
-The new deployment workflow has been tested with a simulated API. A live
-deployment on the friend's GNS3 is still required before claiming the
-four-router lab exists or that a repeat deployment is idempotent there.
+The deployment has run against the friend's GNS3 and its resulting API
+artifact showed four started routers and five links. The immediate startup
+check initially failed before those states updated; the workflow now waits
+for stable status. A successful repeated run is still needed to complete
+live idempotence verification.
+
+## Core interface configuration
+
+The separate **GNS3 core interfaces** workflow configures the router
+hostnames and the ten link endpoints over their existing Telnet consoles.
+It uses the installed Windows PowerShell and .NET runtime; no Python or
+additional console package is required on the runner. Console addresses
+and ports are read from the GNS3 API rather than assumed.
+
+| Link | First endpoint address | Second endpoint address | Mask |
+| --- | --- | --- | --- |
+| R1-R2 | R1: 10.0.12.1 | R2: 10.0.12.2 | 255.255.255.252 |
+| R2-R4 | R2: 10.0.24.1 | R4: 10.0.24.2 | 255.255.255.252 |
+| R1-R3 | R1: 10.0.13.1 | R3: 10.0.13.2 | 255.255.255.252 |
+| R3-R4 | R3: 10.0.34.1 | R4: 10.0.34.2 | 255.255.255.252 |
+| R1-R4 | R1: 10.0.14.1 | R4: 10.0.14.2 | 255.255.255.252 |
+
+### Run the interface workflow
+
+1. Keep Hybrid-Core-Lab open and all four routers started.
+2. Finish the initial IOS setup prompts manually. Consoles must be at an
+   EXEC prompt (`Router>`, `R1#`, etc.). Password-protected consoles and
+   unfinished initial setup are rejected. No passwords are guessed or sent.
+3. Close your console windows before the job and do not type into a router
+   console while automation is using it.
+4. Publish the files, then select **Actions > GNS3 core interfaces > Run
+   workflow** with **mode: plan**. This only reads the API and displays
+   the intended addresses. It does not inspect current IOS configuration.
+5. Review the address plan, then run the workflow again with **mode: apply**.
+
+Apply first verifies the exact four nodes and five unmodified Ethernet
+links, then opens all four consoles and reads the existing hostname and
+target interface configurations. These are backed up to `before-ios.json`
+before configuration begins. A different existing IP address/mask,
+unnumbered interface, or VRF is refused before any router is configured.
+
+It applies only missing hostname, IP address and interface activation
+commands. Matching interfaces are not reconfigured. It does not modify
+unused interfaces or create routes, VLANs, OSPF or EIGRP configuration.
+`terminal length 0` is set for each console session to avoid pagination.
+
+After applying changes to all routers, the workflow waits for the ten
+endpoints to show their expected IP and `up/up` state. It performs an ARP
+warm-up ping, then a separate three-packet measured ping for every
+direction of every link (ten tests). Every measured test must return 3/3
+replies. The transcript preserves warm-up results too. Only after all tests
+pass does it issue `write memory` on the four routers and require `[OK]`.
+
+Artifacts are retained for seven days and include the address plan,
+pre-change hostname/interface backups, pending commands, console transcript,
+and ping results. Backups cover the managed hostname and interfaces, not
+the entire router configuration. The first live apply is still pending;
+simulated tests do not establish that real network connectivity works.
+
+There is no automatic rollback. A failed apply may leave some running
+configuration changed. Configurations are not saved by this run until all
+link tests pass; a later failure during saving may leave only some routers
+saved. Inspect the evidence and correct the cause before rerunning. A
+repeat apply skips matching IP/activation commands and repeats verification.
+Do not erase the routers to recover from a workflow error.
+
+The console transport handles Telnet option negotiation and rejects IOS
+command errors, password prompts and setup dialogs. Telnet is used only
+on the private runner-to-VM console network. No console ports need to be
+opened to the Internet.
+
+For local simulated tests:
+
+```powershell
+.\tests\Test-CoreInterfaces.ps1
+```
+
+For the optional local integration test, use an installed Python 3 runtime:
+
+```powershell
+python tests/Test-InterfaceTransport.py
+```
+
+It runs the actual PowerShell entry point against local HTTP and TCP
+servers that simulate the GNS3 API and four IOS consoles. It checks plan,
+apply, repeat apply, and generated ping evidence. It never contacts the
+real lab. The GitHub workflow does not require Python or run this test.
 
 ## Next milestones
 
-1. Run the core deployment in plan mode, then apply, then repeat apply.
-2. Verify boot and CPU usage with all four routers and obtain a suitable managed switch image.
-3. Automate and validate router interface addresses and the four-router LAN.
-4. Add controlled configuration automation and connectivity verification.
+1. Complete a successful repeated core deployment with stable startup checks.
+2. Run the interface workflow in plan mode, then apply, then repeat apply.
+3. Add and verify OSPF routing with explicit path costs.
+4. Obtain a suitable managed switch image and implement the VLAN/access network.
 5. Add routing experiments, QoS measurements, Suricata, Wazuh and Zabbix.
 6. Add AWS and end-to-end VPN validation.
 
@@ -235,4 +322,6 @@ the routed paths used for network measurements.
 - [GNS3 project creation](https://api.gns3.net/en/stable/api/v2/controller/project/projects.html)
 - [GNS3 node creation](https://api.gns3.net/en/stable/api/v2/controller/node/projectsprojectidnodes.html)
 - [GNS3 link creation](https://api.gns3.net/en/2.2/api/v2/controller/link/projectsprojectidlinks.html)
+- [Cisco IPv4 interface configuration](https://www.cisco.com/c/en/us/td/docs/routers/ios-xe/ip-addressing/ip-addressing/m_config-ipv4-addr-0.html)
+- [Cisco configuration save commands](https://www.cisco.com/c/en/us/td/docs/ios/fundamentals/command/Cisco_IOS_Configuration_Fundamentals_Command_Reference/C_commands.html)
 - [Manually running GitHub workflows](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)

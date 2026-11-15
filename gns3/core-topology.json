@@ -29,10 +29,10 @@
     {"name": "R4", "node_id": "2930ccbf-4c3f-438c-ab59-171872e3b0c4", "x": 350, "y": 0}
   ],
   "links": [
-    {"a": "R1", "a_adapter": 0, "b": "R2", "b_adapter": 0, "subnet": "10.0.12.0/30"},
-    {"a": "R2", "a_adapter": 1, "b": "R4", "b_adapter": 0, "subnet": "10.0.24.0/30"},
-    {"a": "R1", "a_adapter": 1, "b": "R3", "b_adapter": 0, "subnet": "10.0.13.0/30"},
-    {"a": "R3", "a_adapter": 1, "b": "R4", "b_adapter": 1, "subnet": "10.0.34.0/30"},
-    {"a": "R1", "a_adapter": 2, "b": "R4", "b_adapter": 2, "subnet": "10.0.14.0/30"}
+    {"a": "R1", "a_adapter": 0, "a_ip": "10.0.12.1", "b": "R2", "b_adapter": 0, "b_ip": "10.0.12.2", "subnet": "10.0.12.0/30"},
+    {"a": "R2", "a_adapter": 1, "a_ip": "10.0.24.1", "b": "R4", "b_adapter": 0, "b_ip": "10.0.24.2", "subnet": "10.0.24.0/30"},
+    {"a": "R1", "a_adapter": 1, "a_ip": "10.0.13.1", "b": "R3", "b_adapter": 0, "b_ip": "10.0.13.2", "subnet": "10.0.13.0/30"},
+    {"a": "R3", "a_adapter": 1, "a_ip": "10.0.34.1", "b": "R4", "b_adapter": 1, "b_ip": "10.0.34.2", "subnet": "10.0.34.0/30"},
+    {"a": "R1", "a_adapter": 2, "a_ip": "10.0.14.1", "b": "R4", "b_adapter": 2, "b_ip": "10.0.14.2", "subnet": "10.0.14.0/30"}
   ]
 }
