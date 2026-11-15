@@ -18,7 +18,7 @@ jobs:
       run:
         shell: powershell
     env:
-      GNS3_API_URL: http://127.0.0.1:3078
+      GNS3_API_URL: http://127.0.0.1:3076
       GNS3_PROJECT_ID: c2de961e-c2bb-4849-bda7-2ae06e3fd28b
     steps:
       - name: Verify controller, VM, project and PCs
@@ -31,7 +31,7 @@ jobs:
               Invoke-RestMethod -Uri "$apiBase$ApiPath" -Method Get -TimeoutSec 15
             }
             catch {
-              throw "GET $ApiPath failed. Check that GNS3 is running on the runner PC, port 3078 is correct, and API authentication permits this request. Details: $($_.Exception.Message)"
+              throw "GET $ApiPath failed. Check that GNS3 is running on the runner PC, port 3076 is correct, and API authentication permits this request. Details: $($_.Exception.Message)"
             }
           }
 

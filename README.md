@@ -19,7 +19,7 @@ are planned work, not implemented features.
 | Working computer | Project author's Windows PC | Local Git repository |
 | Ubuntu working VM | Project author's PC | Running with Internet access |
 | Self-hosted runner | Friend's Windows PC | Labels: self-hosted, Windows, X64, gns-lab |
-| GNS3 controller | Friend's Windows PC | Version 2.2.61, http://127.0.0.1:3078 |
+| GNS3 controller | Friend's Windows PC | Version 2.2.61, http://127.0.0.1:3076 |
 | GNS3 VM | Friend's VMware environment | Version 2.2.61, 192.168.238.128:80 |
 | Foundation devices | GNS3 VM | PC1 and PC2, both started |
 
@@ -78,7 +78,7 @@ On GitHub:
 - **Queued / waiting for a runner:** confirm the runner is online, has all
   four labels specified by `runs-on`, and is available to this repository.
 - **Connection refused or timeout:** confirm GNS3 is running on the same
-  Windows PC as the runner and its controller still uses port 3078.
+  Windows PC as the runner and its controller still uses port 3076.
 - **HTTP 401 or 403:** the browser session may have authentication that
   the runner does not. Stop and configure credentials through GitHub
   secrets; never paste passwords or tokens into this repository.
