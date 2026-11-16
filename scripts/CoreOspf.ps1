@@ -1,8 +1,11 @@
 function Get-CoreOspfNeighbors([string] $Output) {
-    $rows = [regex]::Matches($Output, '(?m)^\s*([0-9.]+)\s+\d+\s+(\S+)\s+\S+\s+([0-9.]+)\s+((?:FastEthernet|Fa)\d/0)\s*$')
+    $ipv4 = '\d{1,3}(?:\.\d{1,3}){3}'
+    $state = '[A-Z0-9_-]+(?:[ \t]*/[ \t]*[A-Z0-9_-]+)?'
+    $pattern = '(?im)^[ \t]*(' + $ipv4 + ')[ \t]+\d+[ \t]+(' + $state + ')[ \t]+\S+[ \t]+(' + $ipv4 + ')[ \t]+((?:FastEthernet|Fa)\d/0)[ \t]*\r?$'
+    $rows = [regex]::Matches($Output, $pattern)
     foreach ($row in $rows) {
         [pscustomobject]@{
-            router_id = $row.Groups[1].Value; state = $row.Groups[2].Value
+            router_id = $row.Groups[1].Value; state = ($row.Groups[2].Value -replace '[ \t]', '')
             address = $row.Groups[3].Value
             interface = ($row.Groups[4].Value -replace '^Fa(?=\d)', 'FastEthernet')
         }
@@ -172,19 +175,28 @@ function Invoke-CoreOspfConfiguration {
                 $neighbors = @(Get-CoreOspfNeighbors $output)
                 $healthy = $neighbors.Count -eq @($expectedNeighbors[$name]).Count
                 foreach ($expected in $expectedNeighbors[$name]) {
-                    $found = @($neighbors | Where-Object { $_.router_id -eq $expected.router_id -and $_.address -eq $expected.address -and $_.interface -eq $expected.interface -and $_.state -like 'FULL/*' })
+                    $found = @($neighbors | Where-Object { $_.router_id -eq $expected.router_id -and $_.address -eq $expected.address -and $_.interface -eq $expected.interface -and $_.state -match '^FULL(?:/[^/]+)?$' })
                     if ($found.Count -ne 1) { $healthy = $false }
                 }
                 if (-not $healthy) { $allFull = $false }
-                $neighborHistory += [pscustomobject]@{ attempt = $attempt; router = $name; full = $healthy; output = $output }
-                Write-Output "OSPF check ${attempt}: $name neighbors=$($neighbors.Count), expected=$(@($expectedNeighbors[$name]).Count), all FULL=$healthy"
+                $neighborHistory += [pscustomobject]@{ attempt = $attempt; router = $name; full = $healthy; parsed_neighbors = $neighbors; output = $output }
+                Write-Output "OSPF check ${attempt}: $name parsed_neighbors=$($neighbors.Count), expected=$(@($expectedNeighbors[$name]).Count), all FULL=$healthy"
+                if ($attempt -eq 1 -and $neighbors.Count -eq 0 -and $output -match '(?m)^\s*\d{1,3}(?:\.\d{1,3}){3}\s+') {
+                    Write-Warning "$name returned neighbor-like rows that could not be parsed. Raw table: $output"
+                }
             }
             Save-OspfEvidence 'neighbors.json' $neighborHistory
             if ($allFull) { $stable++ } else { $stable = 0 }
             if ($stable -ge 2) { break }
             if ($attempt -lt 40) { Start-Sleep -Seconds 3 }
         }
-        if ($stable -lt 2) { throw 'OSPF did not reach the expected ten directional FULL adjacencies. Inspect neighbors.json; no process restart or link cut was attempted.' }
+        if ($stable -lt 2) {
+            foreach ($sample in ($neighborHistory | Select-Object -Last 4)) {
+                Write-Output "Last raw neighbor table for $($sample.router):"
+                Write-Output $sample.output
+            }
+            throw 'OSPF did not reach the expected ten directional FULL adjacencies. Inspect the raw tables above and neighbors.json; no process restart or link cut was attempted.'
+        }
 
         # Verify all twelve remote /32 routes and the primary next hops in both directions.
         for ($attempt = 1; $attempt -le 10; $attempt++) {

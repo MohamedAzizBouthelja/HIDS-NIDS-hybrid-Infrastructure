@@ -180,7 +180,7 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
                     for link in MANIFEST['links']:
                         for side, other in (('a', 'b'), ('b', 'a')):
                             if link[side] == self.server.name:
-                                state = 'FULL/-' if all_ospf_configured() else 'INIT/-'
+                                state = 'FULL/  -' if all_ospf_configured() else 'INIT/  -'
                                 body += f'{OSPF["router_ids"][link[other]]} 0 {state} 00:00:37 {link[f"{other}_ip"]} FastEthernet{link[f"{side}_adapter"]}/0\r\n'
                 elif command.startswith('show ip route '):
                     COUNTERS['route_reads'] = COUNTERS.get('route_reads', 0) + 1

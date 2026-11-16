@@ -14,6 +14,15 @@ function Assert-OspfTest([bool] $Condition, [string] $Message) {
 }
 $parsed = @(Get-CoreOspfNeighbors "Neighbor ID Pri State Dead Time Address Interface`r`n10.255.0.2 0 FULL/- 00:00:38 10.0.12.2 FastEthernet0/0`r`n10.255.0.3 1 FULL/DR 00:00:37 10.0.13.2 Fa1/0")
 Assert-OspfTest ($parsed.Count -eq 2 -and $parsed[1].interface -eq 'FastEthernet1/0') 'Neighbor parsing must handle full and abbreviated interface names'
+$padded = @(Get-CoreOspfNeighbors "Neighbor ID     Pri   State           Dead Time   Address         Interface`r`n10.255.0.1       0   FULL/  -        00:00:37    10.0.13.1      FastEthernet0/0`r`n10.255.0.4       0   FULL/  -        00:00:38    10.0.34.2      FastEthernet1/0")
+Assert-OspfTest ($padded.Count -eq 2 -and $padded[0].state -eq 'FULL/-') 'IOS padded FULL/  - state must parse and normalize to FULL/-'
+$realTables = Get-Content (Join-Path $PSScriptRoot 'fixtures/ospf-neighbors-ios.json') -Raw | ConvertFrom-Json
+$expectedCounts = @{ R1 = 3; R2 = 2; R3 = 2; R4 = 3 }
+foreach ($name in @('R1','R2','R3','R4')) {
+    $rows = @(Get-CoreOspfNeighbors $realTables.$name)
+    Assert-OspfTest ($rows.Count -eq $expectedCounts[$name] -and @($rows | Where-Object { $_.state -ne 'FULL/-' }).Count -eq 0) 'Captured IOS tables must retain all ten FULL neighbor rows'
+}
+Write-Output 'PASS: captured live IOS tables parse as R1=3, R2=2, R3=2 and R4=3 FULL neighbors'
 $primary = $routingFixture.primary_routes[0]
 $routeText = "Routing entry for 10.255.0.4/32`r`n Known via `"ospf 10`", distance 110, metric 21, type intra area`r`n * 10.0.12.2, from 10.255.0.4, 00:00:03 ago, via FastEthernet0/0`r`n Route metric is 21"
 Assert-OspfTest (Test-CoreOspfRoute $routeText 10 $primary '10.255.0.4') 'Correct primary route must pass'
@@ -158,7 +167,7 @@ function Send-IosCommand($Session, [string] $Command) {
             if ($name -eq 'R1') { $state.neighborRounds++ }
             $full = (Test-AllOspfConfigured) -and $state.fail -ne 'neighbors' -and $state.neighborRounds -gt $state.delayNeighbors
             foreach ($entry in $router.interfaces.GetEnumerator()) {
-                $neighborState = if ($full) { 'FULL/-' } else { 'INIT/-' }
+                $neighborState = if ($full) { 'FULL/  -' } else { 'INIT/  -' }
                 $body += "$($routingFixture.router_ids.($entry.Value.peerName)) 0 $neighborState 00:00:37 $($entry.Value.peer) $($entry.Key)`r`n"
             }
             break

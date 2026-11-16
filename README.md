@@ -376,6 +376,9 @@ configuration, verification requires:
 1. Two consecutive observations of every expected neighbor in FULL state:
    three on R1, two on R2, two on R3 and three on R4 (ten directional
    observations across five unique adjacencies).
+   IOS may display the state as `FULL/  -`; the parser normalizes spaces
+   before counting it as `FULL/-`. Logs label the count `parsed_neighbors`,
+   and a failed convergence check prints the final raw tables for diagnosis.
 2. Each of the twelve remote loopback /32 routes learned through OSPF 10.
    A static or less-specific route does not satisfy this check.
 3. R1's route to 10.255.0.4 has the sole next hop 10.0.12.2 through
