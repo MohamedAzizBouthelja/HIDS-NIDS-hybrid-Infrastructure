@@ -34,7 +34,7 @@ function ConvertFrom-IosTelnet($Session, [byte[]] $Bytes) {
 function Get-IosTerminalState([string] $Text) {
     # Dynamips may replay boot/setup history when a console reconnects.
     # Only the current terminal tail determines whether input is required.
-    $withoutLogs = $Text -replace '(?m)^([A-Za-z0-9_.:-]+(?:\([A-Za-z0-9_-]+\))?[#>])?[^\r\n]*%(?:LINK|LINEPROTO|SYS)-\d-[^\r\n]*', '$1'
+    $withoutLogs = $Text -replace '(?m)^([A-Za-z0-9_.:-]+(?:\([A-Za-z0-9_-]+\))?[#>])?[^\r\n]*%[A-Z][A-Z0-9_]*-[0-7]-[A-Z0-9_]+:[^\r\n]*', '$1'
     $tail = $withoutLogs.TrimEnd()
     if ($tail -match '(?:^|[\r\n])([A-Za-z0-9_.:-]+(?:\([A-Za-z0-9_-]+\))?[#>])$') {
         return [pscustomobject]@{ Kind = 'prompt'; Prompt = $Matches[1]; Detail = '' }
@@ -45,6 +45,22 @@ function Get-IosTerminalState([string] $Text) {
         return [pscustomobject]@{ Kind = 'challenge'; Prompt = ''; Detail = $lastLine }
     }
     return [pscustomobject]@{ Kind = 'waiting'; Prompt = ''; Detail = $lastLine }
+}
+
+function Test-IosCommandEcho([string] $Text, [string] $ExpectedEcho) {
+    if (-not $ExpectedEcho -or $Text.Contains($ExpectedEcho)) { return $true }
+    if ($Text -notmatch '%[A-Z][A-Z0-9_]*-[0-7]-[A-Z0-9_]+:') { return $false }
+    # IOS can insert a syslog anywhere in the echo, even before the remainder
+    # of a command on the same line. Keep raw output, but accept its echoed
+    # characters in order when a recognized asynchronous log is present.
+    $position = 0
+    foreach ($character in $Text.ToCharArray()) {
+        if ($character -ceq $ExpectedEcho[$position]) {
+            $position++
+            if ($position -eq $ExpectedEcho.Length) { return $true }
+        }
+    }
+    return $false
 }
 
 function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutSeconds = 30, [switch] $AllowInitialReturn) {
@@ -81,7 +97,7 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
             throw "IOS is currently waiting at '$($terminal.Detail)'. Prepare this console manually; no credentials or setup answers were sent."
         }
         if ($terminal.Kind -eq 'prompt' -and $quietTimer.ElapsedMilliseconds -ge 100 -and
-            (-not $ExpectedEcho -or $plain.Contains($ExpectedEcho))) {
+            (Test-IosCommandEcho $plain $ExpectedEcho)) {
             $Session.Prompt = $terminal.Prompt
             return $plain
         }
@@ -95,7 +111,7 @@ function Send-IosCommand($Session, [string] $Command, [int] $TimeoutSeconds = 30
     $bytes = [System.Text.Encoding]::ASCII.GetBytes("$Command`r")
     $Session.Stream.Write($bytes, 0, $bytes.Length)
     $output = Read-IosResponse $Session -ExpectedEcho $Command -TimeoutSeconds $TimeoutSeconds
-    $errors = [regex]::Matches($output, '(?im)^\s*%(?!LINK-\d|LINEPROTO-\d|SYS-\d)[^\r\n]*')
+    $errors = [regex]::Matches($output, '(?im)^\s*%(?![A-Z][A-Z0-9_]*-[0-7]-[A-Z0-9_]+:)[^\r\n]*')
     foreach ($errorLine in $errors) {
         # A missing route is a valid show result while OSPF is converging.
         if ($Command -match '^show ip route [0-9.]+$' -and $errorLine.Value.Trim() -match '^% Network not in table\.?$') { continue }

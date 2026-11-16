@@ -37,6 +37,17 @@ Write-Output 'PASS: live authentication, setup and RETURN prompts are identified
 $terminal = Get-IosTerminalState "R1(config-if)#*Nov 15 10:00:00: %LINK-3-UPDOWN: Interface FastEthernet0/0, changed state to up`r`n"
 Assert-InterfaceTest ($terminal.Kind -eq 'prompt' -and $terminal.Prompt -eq 'R1(config-if)#') 'A syslog line must not hide the current configuration prompt'
 Write-Output 'PASS: known syslog messages after the prompt do not hide it'
+$interleavedEcho = "no pass`r`n*Nov 16 20:46:25.275: %LINEPROTO-5-UPDOWN: Line protocol on Interface Loopback0, changed state to upive-interface FastEthernet1/0`r`nR2(config-router)#"
+Assert-InterfaceTest (Test-IosCommandEcho $interleavedEcho 'no passive-interface FastEthernet1/0') 'Recognized syslog may interrupt the echo without a newline before its remainder'
+Assert-InterfaceTest (-not (Test-IosCommandEcho $interleavedEcho 'no passive-interface FastEthernet9/9')) 'Different or incomplete command must not match'
+Assert-InterfaceTest (-not (Test-IosCommandEcho "no pass`r`nive-interface FastEthernet1/0`r`nR2#" 'no passive-interface FastEthernet1/0')) 'Unexplained echo corruption must not be accepted'
+Assert-InterfaceTest (-not (Test-IosCommandEcho "FastEthernet1/0`r`n%SYS-5-CONFIG_I: Configured from console`r`nno passive-interface`r`nR2#" 'no passive-interface FastEthernet1/0')) 'Echo characters must remain in command order'
+Write-Output 'PASS: syslog-interrupted echo is accepted without accepting missing or reordered command characters'
+$ospfEcho = "no pass`r`n*Nov 16 20:46:25.275: %OSPF-5-ADJCHG: Process 10, Nbr 10.255.0.2 on FastEthernet0/0 from LOADING to FULLive-interface FastEthernet1/0`r`nR2(config-router)#"
+Assert-InterfaceTest (Test-IosCommandEcho $ospfEcho 'no passive-interface FastEthernet1/0') 'Structured OSPF syslog must be handled like interface syslog'
+$terminal = Get-IosTerminalState "R1#*Nov 16 20:46:25.275: %OSPF-5-ADJCHG: Process 10, Nbr 10.255.0.2 from LOADING to FULL`r`n"
+Assert-InterfaceTest ($terminal.Kind -eq 'prompt' -and $terminal.Prompt -eq 'R1#') 'OSPF syslog must not hide an EXEC prompt'
+Write-Output 'PASS: OSPF adjacency syslog is recognized without changing the current prompt'
 
 function Reset-InterfaceLab {
     $global:CoreInterfaceMock = @{

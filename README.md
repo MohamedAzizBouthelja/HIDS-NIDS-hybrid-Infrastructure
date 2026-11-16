@@ -290,6 +290,12 @@ command errors, password prompts and setup dialogs. Telnet is used only
 on the private runner-to-VM console network. No console ports need to be
 opened to the Internet.
 
+Recognized asynchronous IOS syslog messages may interrupt a command echo.
+The reader accepts the command characters in order in that case while still
+requiring a stable current IOS prompt and checking for command errors. The
+raw interleaved output is preserved in the transcript. An interrupted job
+can be resumed; matching router configuration is skipped on the next apply.
+
 For local simulated tests:
 
 ```powershell

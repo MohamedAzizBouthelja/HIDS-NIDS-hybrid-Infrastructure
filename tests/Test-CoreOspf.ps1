@@ -26,7 +26,7 @@ Write-Output 'PASS: neighbor and route parsers reject wrong next hops, static ro
 function Reset-OspfLab {
     $global:CoreOspfMock = @{
         nodes = @(); links = @(); routers = @{}; changes = 0; opens = 0; closes = 0; saves = 0; pings = 0
-        fail = ''; delayNeighbors = 0; neighborRounds = 0; routeReads = 0
+        fail = ''; delayNeighbors = 0; neighborRounds = 0; routeReads = 0; configEntries = @{}
     }
     $state = $global:CoreOspfMock
     $port = 5001
@@ -127,7 +127,7 @@ function Send-IosCommand($Session, [string] $Command) {
             if ($config.ospf) { $body += " ip ospf 10 area 0`r`n" }
             break
         }
-        '^configure terminal$' { $Session.Mode = 'config'; $Session.Prompt = "$name(config)#"; break }
+        '^configure terminal$' { $Session.Mode = 'config'; $Session.Prompt = "$name(config)#"; $state.configEntries[$name] = $true; break }
         '^interface (\S+)$' {
             $Session.Selected = $Matches[1]
             if ($Session.Selected -eq 'Loopback0' -and $null -eq $router.loopback) { $router.loopback = @{ address = ''; ospf = $false }; $state.changes++ }
@@ -146,7 +146,12 @@ function Send-IosCommand($Session, [string] $Command) {
         '^router ospf 10$' { $router.process = $true; $Session.Selected = ''; break }
         '^router-id ([0-9.]+)$' { $router.routerId = $Matches[1]; $state.changes++; break }
         '^passive-interface default$' { $router.passive = $true; $state.changes++; break }
-        '^no passive-interface (\S+)$' { $router.active[$Matches[1]] = $true; $state.changes++; break }
+        '^no passive-interface (\S+)$' {
+            $interfaceName = $Matches[1]
+            $router.active[$interfaceName] = $true; $state.changes++
+            if ($state.fail -eq 'interrupted-command' -and $name -eq 'R2' -and $interfaceName -eq 'FastEthernet1/0') { throw 'Simulated command applied before console acknowledgement was interrupted' }
+            break
+        }
         '^exit$' { $Session.Selected = ''; break }
         '^end$' { $Session.Mode = 'exec'; $Session.Prompt = "$name#"; break }
         '^show ip ospf neighbor$' {
@@ -228,6 +233,16 @@ try {
     Run-OspfTest
     Assert-OspfTest ($global:CoreOspfMock.neighborRounds -ge 4 -and $global:CoreOspfMock.routeReads -ge 24 -and $global:CoreOspfMock.saves -eq 4) 'Neighbor and route polling must tolerate convergence delay'
     Write-Output 'PASS: delayed neighbors and routes converge without process resets'
+    Reset-OspfLab
+    $global:CoreOspfMock.fail = 'interrupted-command'
+    $failed = $false
+    try { Run-OspfTest } catch { $failed = $true }
+    Assert-OspfTest ($failed -and $global:CoreOspfMock.saves -eq 0) 'A console failure after applying a command must not save partial routing'
+    $global:CoreOspfMock.fail = ''
+    $global:CoreOspfMock.configEntries = @{}
+    Run-OspfTest
+    Assert-OspfTest ((Test-AllOspfConfigured) -and $global:CoreOspfMock.saves -eq 4 -and -not $global:CoreOspfMock.configEntries.ContainsKey('R1')) 'Resume must skip the completed R1 and finish the partially configured routers'
+    Write-Output 'PASS: resumes after an applied R2 command loses its console acknowledgement'
     Write-Output 'All OSPF tests passed.'
 }
 finally {

@@ -202,7 +202,16 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
                     body = "Building configuration...\r\n[OK]\r\n"
                 else:
                     body = "% Invalid input detected at '^' marker.\r\n"
-                self.request.sendall((command + "\r\n" + body + router["hostname"] + mode + "#").encode())
+                echo = command
+                if command.startswith('no passive-interface '):
+                    # Real IOS syslog can interrupt an echoed command without
+                    # inserting a newline between the log and its remaining text.
+                    message = '%LINEPROTO-5-UPDOWN: Line protocol on Interface Loopback0, changed state to up'
+                    if command.endswith('FastEthernet0/0'):
+                        message = '%OSPF-5-ADJCHG: Process 10, Nbr 10.255.0.2 on FastEthernet0/0 from LOADING to FULL'
+                    echo = command[:7] + '\r\n*Nov 16 20:46:25.275: ' + message + command[7:]
+                    COUNTERS['echo_interruptions'] = COUNTERS.get('echo_interruptions', 0) + 1
+                self.request.sendall((echo + "\r\n" + body + router["hostname"] + mode + "#").encode())
 
 
 class ConsoleServer(socketserver.ThreadingTCPServer):
@@ -290,10 +299,37 @@ def main():
         routes = json.loads((ROOT / 'artifacts/ospf-integration/routes.json').read_text(encoding='utf-8-sig'))
         assert len(routes) == 12 and all(route['valid'] for route in routes)
         print('PASS: twelve OSPF route records saved, including unique primary paths through R2')
+        assert COUNTERS.get('echo_interruptions', 0) > 0
+        print('PASS: OSPF configuration handles syslog inserted into command echoes')
     finally:
         for server in servers:
             server.shutdown()
             server.server_close()
+
+
+def check_interleaved_echo():
+    """Reproduce an OSPF command interrupted by the exact reported syslog."""
+    server = ConsoleServer(('127.0.0.1', 0), ConsoleHandler)
+    server.name = 'R2'
+    server.router = dict(hostname='R2', process=False, router_id='', passive=False, active=set(), interfaces={})
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    transport = str(ROOT / 'scripts/IosConsole.ps1').replace("'", "''")
+    code = ("$ErrorActionPreference='Stop'; . '" + transport + "'; "
+            "$session=Open-IosConsole '127.0.0.1' " + str(server.server_address[1]) + "; "
+            "try { $null=Send-IosCommand $session 'configure terminal'; "
+            "$null=Send-IosCommand $session 'router ospf 10'; "
+            "$output=Send-IosCommand $session 'no passive-interface FastEthernet1/0' -TimeoutSeconds 2; "
+            "if ($session.Prompt -ne 'R2(config-router)#' -or $output -notlike '*%LINEPROTO-5-UPDOWN*') { throw 'Invalid echo test response' }; "
+            "$null=Send-IosCommand $session 'end' "
+            "} finally { Close-IosConsole $session }")
+    try:
+        result = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', code],
+                                capture_output=True, text=True, errors='replace', timeout=12)
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        print('PASS: reported interleaved command echo completes over a real TCP console')
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def check_live_challenges():
@@ -335,3 +371,4 @@ def check_live_challenges():
 if __name__ == "__main__":
     main()
     check_live_challenges()
+    check_interleaved_echo()
