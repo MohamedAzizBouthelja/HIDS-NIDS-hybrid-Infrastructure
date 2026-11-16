@@ -15,8 +15,11 @@ has created four routers and five links in Hybrid-Core-Lab. A supplied API
 artifact showed all four routers started, and the user confirmed their IOS
 consoles reached a prompt. The interface workflow then passed all ten
 directional neighbor ping tests and saved all four configurations (reported
-by the user). OSPF automation is prepared locally and requires its first
-live run. The security stack, AWS and rollback verification remain pending.
+by the user). Live OSPF tables showed all ten expected directional FULL
+entries. The latest reported OSPF run reached `write memory` and stopped
+at an NVRAM overwrite confirmation. The save handler fix is prepared locally
+and requires live validation. The security stack, AWS and rollback
+verification remain pending.
 
 | Component | Location | Observed configuration |
 | --- | --- | --- |
@@ -270,6 +273,14 @@ direction of every link (ten tests). Every measured test must return 3/3
 replies. The transcript preserves warm-up results too. Only after all tests
 pass does it issue `write memory` on the four routers and require `[OK]`.
 
+When that exact command produces the warning about NVRAM previously written
+by a different image version and asks `Overwrite the previous NVRAM
+configuration?[confirm]`, the reader sends Enter once, preserves the warning
+in its transcript and waits for the normal prompt. The caller still requires
+`[OK]`. Unrelated, repeated or bootstrap-image confirmations are rejected.
+If a previous failed run left a console waiting at a confirmation, cancel
+that old dialogue manually before closing the console and starting a new run.
+
 Artifacts are retained for seven days and include the address plan,
 pre-change hostname/interface backups, pending commands, console transcript,
 and ping results. Backups cover the managed hostname and interfaces, not
@@ -397,8 +408,10 @@ apply can leave some running configuration changed; there is no automated
 rollback. Saving happens after verification, but a failure during saving
 can leave only some routers saved. Inspect artifacts before resuming.
 
-The new workflow is tested with simulated IOS state and actual local
-HTTP/Telnet connections. The first live OSPF apply remains pending. Backup
+The workflow is tested with simulated IOS state and actual local
+HTTP/Telnet connections. A live run reached the save stage but stopped at
+the NVRAM confirmation. A complete live pass with all four OSPF saves is
+still pending. Backup
 path availability, convergence time under failure, traceroute and packet
 captures require a later, separately triggered experiment. No ordinary
 OSPF deployment cuts links.

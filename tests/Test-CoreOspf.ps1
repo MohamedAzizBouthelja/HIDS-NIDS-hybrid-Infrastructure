@@ -34,7 +34,7 @@ Write-Output 'PASS: neighbor and route parsers reject wrong next hops, static ro
 
 function Reset-OspfLab {
     $global:CoreOspfMock = @{
-        nodes = @(); links = @(); routers = @{}; changes = 0; opens = 0; closes = 0; saves = 0; pings = 0
+        nodes = @(); links = @(); routers = @{}; changes = 0; opens = 0; closes = 0; saves = 0; saveAttempts = 0; pings = 0
         fail = ''; delayNeighbors = 0; neighborRounds = 0; routeReads = 0; configEntries = @{}
     }
     $state = $global:CoreOspfMock
@@ -188,7 +188,12 @@ function Send-IosCommand($Session, [string] $Command) {
             $body = if ($state.fail -eq 'ping') { 'Success rate is 0 percent (0/3)' } else { 'Success rate is 100 percent (3/3)' }
             break
         }
-        '^write memory$' { $state.saves++; $body = '[OK]'; break }
+        '^write memory$' {
+            $state.saveAttempts++
+            if ($state.fail -eq 'save-ack' -and $name -eq 'R2') { $body = 'Building configuration...' }
+            else { $state.saves++; $body = '[OK]' }
+            break
+        }
         default { throw "Unexpected OSPF command: $Command" }
     }
     return "$Command`r`n$body`r`n$($Session.Prompt)"
@@ -252,6 +257,12 @@ try {
     Run-OspfTest
     Assert-OspfTest ((Test-AllOspfConfigured) -and $global:CoreOspfMock.saves -eq 4 -and -not $global:CoreOspfMock.configEntries.ContainsKey('R1')) 'Resume must skip the completed R1 and finish the partially configured routers'
     Write-Output 'PASS: resumes after an applied R2 command loses its console acknowledgement'
+    Reset-OspfLab
+    $global:CoreOspfMock.fail = 'save-ack'
+    $failed = $false
+    try { Run-OspfTest } catch { $failed = $true }
+    Assert-OspfTest ($failed -and $global:CoreOspfMock.saveAttempts -eq 2 -and $global:CoreOspfMock.saves -eq 1 -and $global:CoreOspfMock.closes -eq 4) 'Saving must stop on a missing OK and must not claim all four routers saved'
+    Write-Output 'PASS: missing save acknowledgement fails even after routes and pings pass'
     Write-Output 'All OSPF tests passed.'
 }
 finally {

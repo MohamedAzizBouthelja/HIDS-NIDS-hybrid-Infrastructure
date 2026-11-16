@@ -1,0 +1,16 @@
+Record type: user-supplied live error excerpt, not an original downloaded job log
+Recorded date: 16 November 2026, Africa/Tunis
+Context: ongoing GNS3 core OSPF workflow troubleshooting
+Original run ID, URL and exact timestamp: not supplied
+
+Reported output:
+Timed out waiting for an IOS prompt after 'write memory'. Last output: write memory
+Warning: Attempting to overwrite an NVRAM configuration previously written
+by a different version of the system image.
+Overwrite the previous NVRAM configuration?[confirm]
+
+Interpretation:
+IOS was waiting for confirmation during saving. This is not an acknowledged
+successful save. The current OSPF script reaches saving only after its route
+and ping verification gates, but the original route/ping logs and complete
+workflow result have not been supplied with this excerpt.

@@ -1,0 +1,17 @@
+Record type: user-reported live workflow result, not an original job log
+Recorded date: 16 November 2026, Africa/Tunis
+Workflow: GNS3 core interfaces
+Source: project chat clarification response
+Original workflow run ID, URL and exact timestamp: not supplied
+
+Question asked:
+Did GNS3 core interfaces finish green with "ten directional ping tests passed"
+and "all four configurations saved," or have you only pushed the latest fix?
+
+User's selected answer:
+Workflow passed all tests and saved configurations
+
+Interpretation:
+The user confirmed successful live interface verification and saving.
+The original per-interface/ping outputs and save acknowledgements are not
+included in this record and still need to be archived from GitHub if available.

@@ -20,6 +20,9 @@ PROJECT_ID = MANIFEST["project"]["project_id"]
 POWERSHELL = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 COUNTERS = dict(opens=0, changes=0, saves=0, measured_pings=0, wake_returns=0)
 ROUTERS = {}
+NVRAM_WARNING = ('Warning: Attempting to overwrite an NVRAM configuration previously written\r\n'
+                 'by a different version of the system image.\r\n'
+                 'Overwrite the previous NVRAM configuration?[confirm]')
 
 
 def all_ospf_configured():
@@ -71,6 +74,7 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
         self.request.sendall(b' no\r\nPress RETURN to get started!\r\nPassword:\r\nRouter#\r\n')
         line, telnet_state, mode, selected = bytearray(), "data", "", None
         waiting_for_return = True
+        pending_save = False
         while True:
             chunk = self.request.recv(8192)
             if not chunk:
@@ -93,6 +97,12 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
                 command = line.decode("ascii")
                 line.clear()
                 if not command:
+                    if pending_save:
+                        pending_save = False
+                        COUNTERS['save_confirmations'] = COUNTERS.get('save_confirmations', 0) + 1
+                        COUNTERS['saves'] += 1
+                        self.request.sendall(('\r\nBuilding configuration...\r\n[OK]\r\n' + router['hostname'] + mode + '#').encode())
+                        continue
                     if waiting_for_return:
                         # An early connection CR can arrive before IOS is ready.
                         self.request.sendall(b'\r\nPress RETURN to get started.')
@@ -198,8 +208,10 @@ class ConsoleHandler(socketserver.BaseRequestHandler):
                     else:
                         body = "Success rate is 0 percent (0/1)\r\n"
                 elif command == "write memory":
-                    COUNTERS["saves"] += 1
-                    body = "Building configuration...\r\n[OK]\r\n"
+                    # All simulated saves exercise the real first-save warning.
+                    pending_save = True
+                    self.request.sendall((command + '\r\n' + NVRAM_WARNING).encode())
+                    continue
                 else:
                     body = "% Invalid input detected at '^' marker.\r\n"
                 echo = command
@@ -296,13 +308,87 @@ def main():
                 assert COUNTERS['changes'] == first_ospf_change_count
                 print('PASS: OSPF repeat apply changes no configuration')
         assert COUNTERS['measured_pings'] == 44 and COUNTERS['saves'] == 16, COUNTERS
+        assert COUNTERS.get('save_confirmations') == 16, COUNTERS
         routes = json.loads((ROOT / 'artifacts/ospf-integration/routes.json').read_text(encoding='utf-8-sig'))
         assert len(routes) == 12 and all(route['valid'] for route in routes)
         print('PASS: twelve OSPF route records saved, including unique primary paths through R2')
         assert COUNTERS.get('echo_interruptions', 0) > 0
         print('PASS: OSPF configuration handles syslog inserted into command echoes')
+        print('PASS: sixteen interface/OSPF saves confirm NVRAM overwrite and receive OK')
     finally:
         for server in servers:
+            server.shutdown()
+            server.server_close()
+
+
+def check_nvram_confirmation():
+    """Only a single exact write-memory warning may receive an Enter."""
+    for scenario in ('success', 'repeated', 'other-confirm', 'bootstrap', 'wrong-command'):
+        counts = dict(confirm_returns=0, attempts=0)
+
+        class SaveHandler(socketserver.BaseRequestHandler):
+            def handle(self):
+                self.request.settimeout(10)
+                line, awaiting = bytearray(), False
+                while True:
+                    chunk = self.request.recv(4096)
+                    if not chunk:
+                        return
+                    for byte in chunk:
+                        if byte in (0, 10):
+                            continue
+                        if byte != 13:
+                            line.append(byte)
+                            continue
+                        command = line.decode('ascii')
+                        line.clear()
+                        if not command and awaiting:
+                            counts['confirm_returns'] += 1
+                            if scenario == 'repeated':
+                                self.request.sendall(('\r\n' + NVRAM_WARNING).encode())
+                            else:
+                                awaiting = False
+                                # Model a slow NVRAM write after accepting confirmation.
+                                time.sleep(0.65)
+                                self.request.sendall(b'\r\nBuilding configuration...\r\n[OK]\r\nR1#')
+                        elif not command:
+                            self.request.sendall(b'\r\nR1#')
+                        elif command == 'terminal length 0':
+                            self.request.sendall((command + '\r\nR1#').encode())
+                        else:
+                            counts['attempts'] += 1
+                            awaiting = True
+                            warning = NVRAM_WARNING
+                            if scenario == 'other-confirm':
+                                warning = 'Erase startup configuration?[confirm]'
+                            elif scenario == 'bootstrap':
+                                warning = ('Warning: Attempting to overwrite an NVRAM configuration written\r\n'
+                                           'by a full system image. This bootstrap software does not support\r\n'
+                                           'the full configuration command set.\r\n'
+                                           'Overwrite the previous NVRAM configuration?[confirm]')
+                            self.request.sendall((command + '\r\n' + warning).encode())
+
+        server = ConsoleServer(('127.0.0.1', 0), SaveHandler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        transport = str(ROOT / 'scripts/IosConsole.ps1').replace("'", "''")
+        command = 'show running-config' if scenario == 'wrong-command' else 'write memory'
+        action = ("$output=Send-IosCommand $session '" + command + "' -TimeoutSeconds 3; "
+                  "if ($output -notlike '*[[]OK[]]*' -or $output -notlike '*Overwrite the previous NVRAM*') { throw 'Save acknowledgement or transcript missing' }")
+        if scenario != 'success':
+            action = ("$rejected=$false; try { $null=Send-IosCommand $session '" + command +
+                      "' -TimeoutSeconds 3 } catch { $rejected=$_.Exception.Message -like '*confirmation*' }; "
+                      "if (-not $rejected) { throw 'Unexpected or repeated confirmation was not rejected' }")
+        code = ("$ErrorActionPreference='Stop'; . '" + transport + "'; "
+                "$session=Open-IosConsole '127.0.0.1' " + str(server.server_address[1]) + "; "
+                "try { " + action + " } finally { Close-IosConsole $session }")
+        try:
+            result = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', code],
+                                    capture_output=True, text=True, errors='replace', timeout=12)
+            assert result.returncode == 0, (scenario, result.stdout, result.stderr)
+            expected = 1 if scenario in ('success', 'repeated') else 0
+            assert counts == dict(confirm_returns=expected, attempts=1), (scenario, counts)
+            print('PASS: bounded NVRAM save confirmation over real TCP -', scenario)
+        finally:
             server.shutdown()
             server.server_close()
 
@@ -372,3 +458,4 @@ if __name__ == "__main__":
     main()
     check_live_challenges()
     check_interleaved_echo()
+    check_nvram_confirmation()

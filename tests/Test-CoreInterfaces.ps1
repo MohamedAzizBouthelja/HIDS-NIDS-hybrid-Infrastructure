@@ -48,6 +48,15 @@ Assert-InterfaceTest (Test-IosCommandEcho $ospfEcho 'no passive-interface FastEt
 $terminal = Get-IosTerminalState "R1#*Nov 16 20:46:25.275: %OSPF-5-ADJCHG: Process 10, Nbr 10.255.0.2 from LOADING to FULL`r`n"
 Assert-InterfaceTest ($terminal.Kind -eq 'prompt' -and $terminal.Prompt -eq 'R1#') 'OSPF syslog must not hide an EXEC prompt'
 Write-Output 'PASS: OSPF adjacency syslog is recognized without changing the current prompt'
+$nvramWarning = "write memory`r`nWarning: Attempting to overwrite an NVRAM configuration previously written`r`nby a different version of the system image.`r`nOverwrite the previous NVRAM configuration?[confirm]"
+$nvramState = Get-IosTerminalState $nvramWarning
+Assert-InterfaceTest ($nvramState.Kind -eq 'confirmation') 'NVRAM confirmation must be distinguished from an EXEC prompt'
+Assert-InterfaceTest (Test-IosNvramSaveConfirmation $nvramWarning 'write memory' $nvramState.Detail) 'Exact write-memory image-version warning may be confirmed'
+Assert-InterfaceTest (-not (Test-IosNvramSaveConfirmation $nvramWarning 'show running-config' $nvramState.Detail)) 'Read-only command must not authorize a save confirmation'
+Assert-InterfaceTest (-not (Test-IosNvramSaveConfirmation $nvramWarning '' $nvramState.Detail)) 'Initial connection must not authorize a save confirmation'
+Assert-InterfaceTest (-not (Test-IosNvramSaveConfirmation $nvramWarning 'write memory' 'Erase startup configuration?[confirm]')) 'Other confirmations must not be accepted'
+Assert-InterfaceTest (-not (Test-IosNvramSaveConfirmation ($nvramWarning.Replace('by a different version of the system image.', 'by a full system image. This bootstrap software does not support the full configuration command set.')) 'write memory' $nvramState.Detail)) 'A bootstrap image warning must not be silently confirmed'
+Write-Output 'PASS: only the exact write-memory NVRAM version warning authorizes confirmation'
 
 function Reset-InterfaceLab {
     $global:CoreInterfaceMock = @{

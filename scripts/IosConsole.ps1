@@ -40,6 +40,9 @@ function Get-IosTerminalState([string] $Text) {
         return [pscustomobject]@{ Kind = 'prompt'; Prompt = $Matches[1]; Detail = '' }
     }
     $lastLine = ($tail -split '[\r\n]')[-1].Trim()
+    if ($lastLine -match '\[confirm\]$') {
+        return [pscustomobject]@{ Kind = 'confirmation'; Prompt = ''; Detail = $lastLine }
+    }
     if ($lastLine -match '(?i)^(Username|Password):$' -or
         $lastLine -match '(?i)(initial configuration dialog|terminate autoinstall).*:\s*$|Press RETURN to get started[!.]?\s*$') {
         return [pscustomobject]@{ Kind = 'challenge'; Prompt = ''; Detail = $lastLine }
@@ -63,12 +66,21 @@ function Test-IosCommandEcho([string] $Text, [string] $ExpectedEcho) {
     return $false
 }
 
+function Test-IosNvramSaveConfirmation([string] $Text, [string] $ExpectedEcho, [string] $Question) {
+    return ($ExpectedEcho -ceq 'write memory' -and
+        $Question -match '^Overwrite the previous NVRAM configuration\?\s*\[confirm\]$' -and
+        $Text -match '(?i)Warning:\s*Attempting to overwrite an NVRAM configuration previously written\s+by a different version of the system image\.' -and
+        (Test-IosCommandEcho $Text $ExpectedEcho))
+}
+
 function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutSeconds = 30, [switch] $AllowInitialReturn) {
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
     $quietTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $buffer = [byte[]]::new(8192)
     $text = [System.Text.StringBuilder]::new()
     $wakeReturns = 0
+    $saveConfirmations = 0
+    $handledConfirmationOffset = -1
     while ($timer.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
         if ($Session.Stream.DataAvailable) {
             $read = $Session.Stream.Read($buffer, 0, $buffer.Length)
@@ -82,6 +94,26 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
         }
         $plain = $text.ToString() -replace '\x1b\[[0-9;]*[A-Za-z]', ''
         $terminal = Get-IosTerminalState $plain
+        if ($terminal.Kind -eq 'confirmation' -and $quietTimer.ElapsedMilliseconds -ge 500) {
+            $offset = $plain.LastIndexOf($terminal.Detail, [System.StringComparison]::Ordinal)
+            if ($saveConfirmations -eq 1 -and $offset -eq $handledConfirmationOffset) {
+                # IOS can take time to write NVRAM. The old question remains in
+                # the buffer while waiting for new data; do not confirm it twice.
+            }
+            elseif ($saveConfirmations -eq 0 -and $offset -ge 0 -and
+                (Test-IosNvramSaveConfirmation $plain $ExpectedEcho $terminal.Detail)) {
+                Write-Verbose 'Confirming the NVRAM overwrite requested by write memory.'
+                $Session.Stream.Write([byte[]]@(13), 0, 1)
+                $saveConfirmations++
+                $handledConfirmationOffset = $offset
+                $quietTimer.Restart()
+                # Preserve the warning and confirmation in the returned transcript.
+                continue
+            }
+            else {
+                throw "IOS requested an unsupported or repeated confirmation after '$ExpectedEcho': $($terminal.Detail). No additional confirmation was sent."
+            }
+        }
         if ($terminal.Kind -eq 'challenge' -and $quietTimer.ElapsedMilliseconds -ge 500) {
             if ($AllowInitialReturn -and -not $ExpectedEcho -and $wakeReturns -lt 2 -and
                 $terminal.Detail -match '(?i)^Press RETURN to get started[!.]?$') {
