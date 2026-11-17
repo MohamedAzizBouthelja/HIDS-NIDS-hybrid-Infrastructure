@@ -5,6 +5,7 @@ function Invoke-CoreFailover {
         [string] $ApiBaseUrl = 'http://127.0.0.1:3076',
         [string] $ManifestPath,
         [string] $EvidenceDirectory,
+        [switch] $CaptureTraceroute,
         [ValidateRange(1,120)][int] $Attempts = 40,
         [ValidateRange(0,10)][int] $PollSeconds = 2
     )
@@ -16,20 +17,24 @@ function Invoke-CoreFailover {
     $nodes = @($response | ForEach-Object { $_ })
     $plan = 'Temporarily shutdown R1 FastEthernet0/0; verify R1-R3-R4 in both directions; no shutdown; verify R1-R2-R4. No startup save.'
     Write-Output $plan
+    if ($CaptureTraceroute) { Write-Output 'Traceroute capture enabled: both directions during baseline, backup and recovery; maximum TTL 4.' }
     if ($Mode -eq 'plan') { return }
     if (-not $EvidenceDirectory) { throw 'Apply requires an evidence directory.' }
     [void](New-Item -ItemType Directory -Path $EvidenceDirectory -Force)
     $sessions = @{}
     $transcript = [System.Collections.Generic.List[object]]::new()
     $observations = [System.Collections.Generic.List[object]]::new()
+    $traces = [System.Collections.Generic.List[object]]::new()
     $result = [ordered]@{ started_utc = [DateTime]::UtcNow.ToString('o'); plan = $plan; shutdown_attempted = $false; restored = $false; passed = $false; error = ''; restoration_error = '' }
     $result.commit_sha = $env:GITHUB_SHA
     $result.run_id = $env:GITHUB_RUN_ID
     $result.run_attempt = $env:GITHUB_RUN_ATTEMPT
+    $result.capture_traceroute = [bool]$CaptureTraceroute
     function Save-FailoverEvidence {
         ConvertTo-Json -InputObject $transcript.ToArray() -Depth 12 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'console-transcript.json') -Encoding UTF8
         ConvertTo-Json -InputObject $observations.ToArray() -Depth 12 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'observations.json') -Encoding UTF8
         $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'result.json') -Encoding UTF8
+        if ($CaptureTraceroute) { ConvertTo-Json -InputObject $traces.ToArray() -Depth 12 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'traceroutes.json') -Encoding UTF8 }
     }
     function Invoke-FailoverCommand([string] $Name, [string] $Command) {
         $output = Send-IosCommand $sessions[$Name] $Command
@@ -57,6 +62,15 @@ function Invoke-CoreFailover {
                     $null = Invoke-FailoverCommand $name "ping $destination source $source repeat 1 timeout 1"
                     $output = Invoke-FailoverCommand $name "ping $destination source $source repeat 3 timeout 1"
                     if ($output -notmatch 'Success rate is 100 percent\s*\(3/3\)') { throw "$Phase routed ping failed on $name." }
+                    if ($CaptureTraceroute) {
+                        # Four TTL levels, one probe each, one-second timeout;
+                        # numeric output avoids DNS delays. This is diagnostic
+                        # capture: route/ping acceptance remains independent.
+                        $command = "traceroute $destination numeric probe 1 source $source timeout 1 ttl 1 4"
+                        $output = Invoke-FailoverCommand $name $command
+                        $traces.Add([pscustomobject]@{ phase = $Phase; router = $name; utc = [DateTime]::UtcNow.ToString('o'); command = $command; output = $output })
+                        Save-FailoverEvidence
+                    }
                 }
                 Write-Output "PASS: $Phase unique next hops and bidirectional loopback pings."
                 return
@@ -148,4 +162,5 @@ function Invoke-CoreFailover {
         finally { $result.finished_utc = [DateTime]::UtcNow.ToString('o'); Save-FailoverEvidence }
     }
     Write-Output 'VERIFIED: primary baseline, backup through R3, primary recovery; no configuration saved. Timing is route observation latency, not packet-loss convergence.'
+    if ($CaptureTraceroute) { Write-Output 'CAPTURED: six diagnostic traceroutes; inspect traceroutes.json for hop responses and timeouts.' }
 }

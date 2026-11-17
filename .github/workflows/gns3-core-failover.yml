@@ -8,6 +8,10 @@ on:
         type: choice
         options: [plan, apply]
         default: plan
+      capture_traceroute:
+        description: Capture bounded traceroutes during baseline, backup and recovery
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,7 +37,8 @@ jobs:
       - name: Plan or exercise primary link failure
         env:
           FAILOVER_MODE: ${{ inputs.mode }}
-        run: ./scripts/Test-CoreFailover.ps1 -Mode $env:FAILOVER_MODE
+          CAPTURE_TRACEROUTE: ${{ inputs.capture_traceroute }}
+        run: ./scripts/Test-CoreFailover.ps1 -Mode $env:FAILOVER_MODE -CaptureTraceroute:($env:CAPTURE_TRACEROUTE -eq 'true')
       - name: Save failover evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

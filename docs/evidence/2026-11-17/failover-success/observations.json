@@ -1,0 +1,194 @@
+﻿[
+    {
+        "phase":  "baseline",
+        "attempt":  1,
+        "router":  "R1",
+        "valid":  true,
+        "elapsed_seconds":  0.3910266,
+        "utc":  "2026-11-17T18:56:17.8470666Z"
+    },
+    {
+        "phase":  "baseline",
+        "attempt":  1,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  0.6989939,
+        "utc":  "2026-11-17T18:56:18.1556298Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  1,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  0.4191881,
+        "utc":  "2026-11-17T18:56:21.6813828Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  1,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  0.65175299999999992,
+        "utc":  "2026-11-17T18:56:21.9138795Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  2,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  3.1453748999999998,
+        "utc":  "2026-11-17T18:56:24.4077948Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  2,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  3.4566364999999997,
+        "utc":  "2026-11-17T18:56:24.7188428Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  3,
+        "router":  "R1",
+        "valid":  true,
+        "elapsed_seconds":  5.7294031,
+        "utc":  "2026-11-17T18:56:26.9919396Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  3,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  6.0292214,
+        "utc":  "2026-11-17T18:56:27.2919836Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  1,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  0.2934798,
+        "utc":  "2026-11-17T18:56:30.9091532Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  1,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  0.6198405,
+        "utc":  "2026-11-17T18:56:31.2356149Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  2,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  3.0655550999999996,
+        "utc":  "2026-11-17T18:56:33.6813040Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  2,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  3.3128775,
+        "utc":  "2026-11-17T18:56:33.9276514Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  3,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  5.6544285,
+        "utc":  "2026-11-17T18:56:36.2700308Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  3,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  5.9664804,
+        "utc":  "2026-11-17T18:56:36.5825672Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  4,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  8.3347984,
+        "utc":  "2026-11-17T18:56:38.9508374Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  4,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  8.6168818,
+        "utc":  "2026-11-17T18:56:39.2326153Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  5,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  10.9788648,
+        "utc":  "2026-11-17T18:56:41.5943063Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  5,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  11.2927296,
+        "utc":  "2026-11-17T18:56:41.9087769Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  6,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  13.560149599999999,
+        "utc":  "2026-11-17T18:56:44.1759074Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  6,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  13.8708152,
+        "utc":  "2026-11-17T18:56:44.4860272Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  7,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  16.2029045,
+        "utc":  "2026-11-17T18:56:46.8186056Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  7,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  16.5171666,
+        "utc":  "2026-11-17T18:56:47.1320079Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  8,
+        "router":  "R1",
+        "valid":  true,
+        "elapsed_seconds":  18.8232134,
+        "utc":  "2026-11-17T18:56:49.4389224Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  8,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  19.1042228,
+        "utc":  "2026-11-17T18:56:49.7197987Z"
+    }
+]

@@ -1,0 +1,25 @@
+{
+  "sha256": "cb83c3ae27f38d9e44d50b1c455b08cbcfae93f844e3469ea6ce125b3340fa44",
+  "run_url": "https://github.com/MohamedAzizBouthelja/HIDS-NIDS-hybrid-Infrastructure/actions/runs/44153014000",
+  "commit_sha": "2cdd46d40a3824d6b9240e2e71e693e9a0e3570a",
+  "started_utc": "2026-11-17T18:56:13.9949823Z",
+  "finished_utc": "2026-11-17T18:56:51.4244533Z",
+  "first_valid_route_poll_seconds": {
+    "baseline": {
+      "R1": 0.3910266,
+      "R4": 0.6989939
+    },
+    "backup": {
+      "R1": 5.7294031,
+      "R4": 6.0292214
+    },
+    "recovery": {
+      "R1": 18.8232134,
+      "R4": 8.6168818
+    }
+  },
+  "measured_ping_tests": 6,
+  "ping_replies_per_test": "3/3",
+  "restored_up_up": true,
+  "limitations": "Route polling is not exact convergence time or packet-loss measurement. No traceroute or tertiary backup in this run."
+}

@@ -1,0 +1,284 @@
+﻿[
+    {
+        "utc":  "2026-11-17T18:56:16.9594980Z",
+        "router":  "R1",
+        "command":  "show running-config interface FastEthernet0/0",
+        "output":  "show running-config interface FastEthernet0/0\r\nBuilding configuration...\r\n\r\nCurrent configuration : 152 bytes\r\n!\r\ninterface FastEthernet0/0\r\n ip address 10.0.12.1 255.255.255.252\r\n ip ospf network point-to-point\r\n ip ospf 10 area 0\r\n ip ospf cost 10\r\n duplex half\r\nend\r\n\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:17.4234032Z",
+        "router":  "R1",
+        "command":  "show ip interface brief",
+        "output":  "show ip interface brief\r\nInterface                  IP-Address      OK? Method Status                Protocol\r\nFastEthernet0/0            10.0.12.1       YES NVRAM  up                    up      \r\nFastEthernet1/0            10.0.13.1       YES NVRAM  up                    up      \r\nFastEthernet2/0            10.0.14.1       YES NVRAM  up                    up      \r\nFastEthernet3/0            unassigned      YES NVRAM  administratively down down    \r\nFastEthernet4/0            unassigned      YES NVRAM  administratively down down    \r\nFastEthernet5/0            unassigned      YES NVRAM  administratively down down    \r\nLoopback0                  10.255.0.1      YES NVRAM  up                    up      \r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:17.8110925Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.12.2 on FastEthernet0/0, 00:04:16 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.12.2, from 10.255.0.4, 00:04:16 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:18.1544869Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.24.1 on FastEthernet0/0, 00:04:16 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.1, from 10.255.0.1, 00:04:16 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:18.7681111Z",
+        "router":  "R1",
+        "command":  "ping 10.255.0.4 source 10.255.0.1 repeat 1 timeout 1",
+        "output":  "ping 10.255.0.4 source 10.255.0.1 repeat 1 timeout 1\r\nType escape sequence to abort.\r\nSending 1, 100-byte ICMP Echos to 10.255.0.4, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.1 \r\n!\r\nSuccess rate is 100 percent (1/1), round-trip min/avg/max = 188/188/188 ms\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:19.2783766Z",
+        "router":  "R1",
+        "command":  "ping 10.255.0.4 source 10.255.0.1 repeat 3 timeout 1",
+        "output":  "ping 10.255.0.4 source 10.255.0.1 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.4, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.1 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 56/80/92 ms\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:19.6337077Z",
+        "router":  "R4",
+        "command":  "ping 10.255.0.1 source 10.255.0.4 repeat 1 timeout 1",
+        "output":  "ping 10.255.0.1 source 10.255.0.4 repeat 1 timeout 1\r\nType escape sequence to abort.\r\nSending 1, 100-byte ICMP Echos to 10.255.0.1, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.4 \r\n!\r\nSuccess rate is 100 percent (1/1), round-trip min/avg/max = 16/16/16 ms\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:20.0208035Z",
+        "router":  "R4",
+        "command":  "ping 10.255.0.1 source 10.255.0.4 repeat 3 timeout 1",
+        "output":  "ping 10.255.0.1 source 10.255.0.4 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.1, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.4 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 4/42/68 ms\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:20.2679143Z",
+        "router":  "R1",
+        "command":  "configure terminal",
+        "output":  "configure terminal\r\nEnter configuration commands, one per line.  End with CNTL/Z.\r\nR1(config)#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:20.5157588Z",
+        "router":  "R1",
+        "command":  "interface FastEthernet0/0",
+        "output":  "interface FastEthernet0/0\r\nR1(config-if)#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:20.8737651Z",
+        "router":  "R1",
+        "command":  "shutdown",
+        "output":  "shutdown\r\nR1(config-if)#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:21.2616076Z",
+        "router":  "R1",
+        "command":  "end",
+        "output":  "end\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:21.6813828Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.12.2 on FastEthernet0/0, 00:04:19 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.12.2, from 10.255.0.4, 00:04:19 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:21.9138795Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.24.1 on FastEthernet0/0, 00:04:20 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.1, from 10.255.0.1, 00:04:20 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:24.4066039Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "\r\n*Nov 17 18:56:20.671: %OSPF-5-ADJCHG: Process 10, Nbr 10.255.0.2 on FastEthernet0/0 from FULL to DOWN, Neighbor Down: Interface down or detached\r\n*Nov 17 18:56:20.711: %SYS-5-CONFIG_I: Configured from console by consoleshow ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.12.2 on FastEthernet0/0, 00:04:22 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.12.2, from 10.255.0.4, 00:04:22 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR1#\r\n*Nov 17 18:56:22.647: %LINK-5-CHANGED: Interface FastEthernet0/0, changed state to administratively down\r\n*Nov 17 18:56:23.647: %LINEPROTO-5-UPDOWN: Line protocol on Interface FastEthernet0/0, changed state to down"
+    },
+    {
+        "utc":  "2026-11-17T18:56:24.7188428Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.24.1 on FastEthernet0/0, 00:04:23 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.1, from 10.255.0.1, 00:04:23 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:26.9911055Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.13.2 on FastEthernet1/0, 00:00:01 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.13.2, from 10.255.0.4, 00:00:01 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:27.2901495Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.34.1 on FastEthernet1/0, 00:00:00 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.34.1, from 10.255.0.1, 00:00:00 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:27.6766443Z",
+        "router":  "R1",
+        "command":  "ping 10.255.0.4 source 10.255.0.1 repeat 1 timeout 1",
+        "output":  "ping 10.255.0.4 source 10.255.0.1 repeat 1 timeout 1\r\nType escape sequence to abort.\r\nSending 1, 100-byte ICMP Echos to 10.255.0.4, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.1 \r\n!\r\nSuccess rate is 100 percent (1/1), round-trip min/avg/max = 52/52/52 ms\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:28.0791382Z",
+        "router":  "R1",
+        "command":  "ping 10.255.0.4 source 10.255.0.1 repeat 3 timeout 1",
+        "output":  "ping 10.255.0.4 source 10.255.0.1 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.4, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.1 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 8/41/64 ms\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:28.4741952Z",
+        "router":  "R4",
+        "command":  "ping 10.255.0.1 source 10.255.0.4 repeat 1 timeout 1",
+        "output":  "ping 10.255.0.1 source 10.255.0.4 repeat 1 timeout 1\r\nType escape sequence to abort.\r\nSending 1, 100-byte ICMP Echos to 10.255.0.1, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.4 \r\n!\r\nSuccess rate is 100 percent (1/1), round-trip min/avg/max = 144/144/144 ms\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:28.9781864Z",
+        "router":  "R4",
+        "command":  "ping 10.255.0.1 source 10.255.0.4 repeat 3 timeout 1",
+        "output":  "ping 10.255.0.1 source 10.255.0.4 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.1, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.4 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 8/65/96 ms\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:29.3136847Z",
+        "router":  "R1",
+        "command":  "configure terminal",
+        "output":  "configure terminal\r\nEnter configuration commands, one per line.  End with CNTL/Z.\r\nR1(config)#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:29.5369648Z",
+        "router":  "R1",
+        "command":  "interface FastEthernet0/0",
+        "output":  "interface FastEthernet0/0\r\nR1(config-if)#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:30.0262297Z",
+        "router":  "R1",
+        "command":  "no shutdown",
+        "output":  "no shutdown\r\nR1(config-if)#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:30.2946135Z",
+        "router":  "R1",
+        "command":  "end",
+        "output":  "end\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:30.6124662Z",
+        "router":  "R1",
+        "command":  "show ip interface brief",
+        "output":  "show ip interface brief\r\nInterface                  IP-Address      OK? Method Status                Protocol\r\nFastEthernet0/0            10.0.12.1       YES NVRAM  up                    up      \r\nFastEthernet1/0            10.0.13.1       YES NVRAM  up                    up      \r\nFastEthernet2/0            10.0.14.1       YES NVRAM  up                    up      \r\nFastEthernet3/0            unassigned      YES NVRAM  administratively down down    \r\nFastEthernet4/0            unassigned      YES NVRAM  administratively down down    \r\nFastEthernet5/0            unassigned      YES NVRAM  administratively down down    \r\nLoopback0                  10.255.0.1      YES NVRAM  up                    up      \r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:30.9078235Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.13.2 on FastEthernet1/0, 00:00:05 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.13.2, from 10.255.0.4, 00:00:05 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:31.2342795Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.34.1 on FastEthernet1/0, 00:00:04 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.34.1, from 10.255.0.1, 00:00:04 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:33.6799232Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "\r\n*Nov 17 18:56:30.031: %SYS-5-CONFIG_I: Configured from console by console\r\n*Nov 17 18:56:31.839: %LINK-3-UPDOWN: Interface FastEthernet0/0, changed state to upshow ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.13.2 on FastEthernet1/0, 00:00:07 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.13.2, from 10.255.0.4, 00:00:07 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:33.9276514Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.34.1 on FastEthernet1/0, 00:00:07 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.34.1, from 10.255.0.1, 00:00:07 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:36.2688239Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "\r\n*Nov 17 18:56:32.839: %LINEPROTO-5-UPDOWN: Line protocol on Interface FastEthernet0/0, changed state to upshow ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.13.2 on FastEthernet1/0, 00:00:10 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.13.2, from 10.255.0.4, 00:00:10 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:36.5812779Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.34.1 on FastEthernet1/0, 00:00:09 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.34.1, from 10.255.0.1, 00:00:09 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:38.9496264Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.13.2 on FastEthernet1/0, 00:00:13 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.13.2, from 10.255.0.4, 00:00:13 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR1#\r\n*Nov 17 18:56:37.531: %OSPF-5-ADJCHG: Process 10, Nbr 10.255.0.2 on FastEthernet0/0 from LOADING to FULL, Loading Done"
+    },
+    {
+        "utc":  "2026-11-17T18:56:39.2315792Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.24.1 on FastEthernet0/0, 00:00:01 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.1, from 10.255.0.1, 00:00:01 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:41.5943063Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.13.2 on FastEthernet1/0, 00:00:16 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.13.2, from 10.255.0.4, 00:00:16 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:41.9071829Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.24.1 on FastEthernet0/0, 00:00:04 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.1, from 10.255.0.1, 00:00:04 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:44.1748875Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.13.2 on FastEthernet1/0, 00:00:18 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.13.2, from 10.255.0.4, 00:00:18 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:44.4860272Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.24.1 on FastEthernet0/0, 00:00:06 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.1, from 10.255.0.1, 00:00:06 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:46.8186056Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 61, type intra area\r\n  Last update from 10.0.13.2 on FastEthernet1/0, 00:00:21 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.13.2, from 10.255.0.4, 00:00:21 ago, via FastEthernet1/0\r\n      Route metric is 61, traffic share count is 1\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:47.1320079Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.24.1 on FastEthernet0/0, 00:00:09 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.1, from 10.255.0.1, 00:00:09 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:49.4389224Z",
+        "router":  "R1",
+        "command":  "show ip route 10.255.0.4",
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.12.2 on FastEthernet0/0, 00:00:02 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.12.2, from 10.255.0.4, 00:00:02 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:49.7184590Z",
+        "router":  "R4",
+        "command":  "show ip route 10.255.0.1",
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.24.1 on FastEthernet0/0, 00:00:12 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.1, from 10.255.0.1, 00:00:12 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:50.2024979Z",
+        "router":  "R1",
+        "command":  "ping 10.255.0.4 source 10.255.0.1 repeat 1 timeout 1",
+        "output":  "ping 10.255.0.4 source 10.255.0.1 repeat 1 timeout 1\r\nType escape sequence to abort.\r\nSending 1, 100-byte ICMP Echos to 10.255.0.4, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.1 \r\n!\r\nSuccess rate is 100 percent (1/1), round-trip min/avg/max = 56/56/56 ms\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:50.6741131Z",
+        "router":  "R1",
+        "command":  "ping 10.255.0.4 source 10.255.0.1 repeat 3 timeout 1",
+        "output":  "ping 10.255.0.4 source 10.255.0.1 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.4, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.1 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 20/57/84 ms\r\nR1#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:50.9855857Z",
+        "router":  "R4",
+        "command":  "ping 10.255.0.1 source 10.255.0.4 repeat 1 timeout 1",
+        "output":  "ping 10.255.0.1 source 10.255.0.4 repeat 1 timeout 1\r\nType escape sequence to abort.\r\nSending 1, 100-byte ICMP Echos to 10.255.0.1, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.4 \r\n!\r\nSuccess rate is 100 percent (1/1), round-trip min/avg/max = 36/36/36 ms\r\nR4#"
+    },
+    {
+        "utc":  "2026-11-17T18:56:51.3885896Z",
+        "router":  "R4",
+        "command":  "ping 10.255.0.1 source 10.255.0.4 repeat 3 timeout 1",
+        "output":  "ping 10.255.0.1 source 10.255.0.4 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.1, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.4 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 32/45/68 ms\r\nR4#"
+    }
+]

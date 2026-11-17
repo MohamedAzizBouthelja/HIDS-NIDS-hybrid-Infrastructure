@@ -33,13 +33,19 @@ directions, and four `[OK]` save acknowledgements. The NVRAM confirmation
 handler is validated by the live R2/R3/R4 save transcripts. Reboot
 persistence remains a separate, untested property.
 
-A controlled failover run passed primary baseline and backup path checks,
-according to supplied live job output, then failed restoration. The workflow
-sent `end` at `R1#`, where IOS attempted hostname lookup. The local fix sends
-`end` only in configuration mode; mode-aware regression tests pass. Manual
-link restoration and a successful new live recovery check remain unconfirmed.
-VLANs, firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN
-remain future work.
+The corrected failover is verified from the downloaded live artifact for
+run `44153014000`, commit `2cdd46d40a3824d6b9240e2e71e693e9a0e3570a`.
+It establishes primary routing through R2, backup through R3 after shutting
+R1 FastEthernet0/0, restored up/up state, primary recovery, and six measured
+3/3 ping tests (both directions in all three phases). The original ZIP,
+JSON files and metadata are [archived here](docs/evidence/2026-11-17/failover-success/README.md).
+
+First valid backup polls occurred at 5.729 s on R1 and 6.029 s on R4.
+First valid recovery polls occurred at 18.823 s on R1 and 8.617 s on R4.
+These timers measure sequential route polling, not exact convergence or
+packet loss. Optional bounded traceroute capture is now implemented and
+tested locally, but still needs a live run. The tertiary backup, VLANs,
+firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
 
 | Work item | Status | Evidence |
 | --- | --- | --- |
@@ -58,11 +64,13 @@ remain future work.
 | OSPF neighbor-state parser | Corrected and tested locally | Padded IOS state normalized; captured tables parse as 3/2/2/3 |
 | OSPF route, routed ping and primary-path checks | Verified from downloaded live artifact | Twelve exact OSPF routes, twelve 3/3 pings, primary next hops through R2 in both directions |
 | Complete OSPF job and final startup saves | User reports success; four saves verified in artifact | Four write memory outputs contain [OK]; reboot persistence has not been tested |
+| Controlled OSPF failover and primary recovery | Verified from live artifact | Run 44153014000: restored=true, passed=true; raw routes, up/up and six 3/3 ping results |
 | Live repeat-deployment verification | Pending final evidence | Existing objects were reused during troubleshooting; a complete successful repeat run remains to be recorded |
 | VLANs, managed switching, firewall, QoS, HIDS/NIDS and AWS/VPN | Not demonstrated | Architecture scope only at this checkpoint |
 
 Evidence archives: [historical failures and neighbor tables](docs/evidence/2026-11-16/README.md)
-and [successful OSPF baseline](docs/evidence/2026-11-17/README.md).
+[successful OSPF baseline](docs/evidence/2026-11-17/README.md),
+and [successful failover](docs/evidence/2026-11-17/failover-success/README.md).
 
 ## 1 Environment and responsibilities
 
@@ -519,7 +527,8 @@ The filename identifies run 43959781140, attempt 1; commit SHA and execution
 timestamps were not supplied in the artifact. A later user-supplied failover
 job excerpt confirms baseline and backup checks passed but restoration failed;
 see [the failure excerpt](docs/evidence/2026-11-17/failover-restoration-failure.txt).
-Primary recovery and traceroute remain unverified.
+The corrected successful run is now archived with raw primary, backup and
+recovery evidence, commit SHA and timestamps. Traceroute remains unverified.
 
 ## 6 Tests and evidence
 
@@ -609,15 +618,13 @@ Relevant commits present in the local repository:
 
 ## 8 Next actions
 
-1. Manually restore R1 FastEthernet0/0 with `no shutdown` before another run.
-2. Commit and push the failover restoration fix and evidence documentation.
-3. Keep Hybrid-Core-Lab open, routers running and runner online; close manual consoles.
-4. Start a new **GNS3 core failover** run on the updated `main` in mode `apply`.
-5. Preserve `result.json`, `observations.json` and `console-transcript.json`.
-6. Confirm backup routing through R3 and primary recovery through R2 from live evidence.
-7. Add traceroute and packet-loss/convergence measurement as a separate experiment.
-8. Archive original interface job evidence and repeat-deployment evidence if available.
-9. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.
+1. Commit and push the successful failover archive and optional traceroute capture.
+2. Keep the runner and four routers online, and close manual consoles.
+3. Run **GNS3 core failover** on updated `main`, mode `apply`, with `capture_traceroute` enabled.
+4. Download the artifact and inspect its six traces in `traceroutes.json`.
+5. Measure packet loss and convergence separately; route polls do not establish these.
+6. Archive original interface job and repeat-deployment evidence if available.
+7. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.
 
 The failover workflow temporarily shuts only R1 FastEthernet0/0. Cleanup
 attempts `no shutdown` even after a failed test or lost shutdown acknowledgement.

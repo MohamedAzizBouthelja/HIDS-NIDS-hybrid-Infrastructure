@@ -19,7 +19,8 @@ by the user). The successful downloaded OSPF artifact confirms ten directional F
 neighbors, twelve remote loopback routes, twelve routed 3/3 pings, primary
 next hops through R2 and four acknowledged configuration saves.
 See [the live evidence archive](docs/evidence/2026-11-17/README.md).
-The security stack, AWS and live failover validation remain pending.
+The user reports the corrected failover workflow passed; its successful
+artifact still needs inspection. The security stack and AWS remain pending.
 
 | Component | Location | Observed configuration |
 | --- | --- | --- |
@@ -478,14 +479,41 @@ Download the `core-failover` artifact. `result.json` records success and
 restoration status; `observations.json` records route polling; the console
 transcript retains route and ping outputs. Poll elapsed times describe route
 observation latency, not precise convergence time or packet loss. The direct
-R1-R4 tertiary backup and traceroute are outside this experiment.
+R1-R4 tertiary backup remains outside this experiment.
 
 Local verification: `./tests/Test-CoreFailover.ps1`. These mock tests cover
 preflight refusal, primary/backup/recovery paths, ping failure, lost shutdown
-acknowledgements and restoration failure. A live failover run is still needed.
+acknowledgements and restoration failure. The successful corrected live run
+is archived with its original ZIP, raw outputs, commit and timestamps.
 
 The first reported live failover run passed baseline and backup path checks,
 then failed restoration because `end` was sent at EXEC. Restoration now sends
 `end` only from configuration mode, including on reconnect. The mode-aware
-tests reproduce the original failure and pass with the fix. Full live recovery
-verification remains pending.
+tests reproduce the original failure and pass with the fix. The user
+subsequently confirms workflow success, including primary recovery.
+Successful run artifacts and metadata are now archived under
+`docs/evidence/2026-11-17/failover-success/`.
+
+
+### Optional traceroute capture
+
+The next checkpoint adds path observations to the proven failover test.
+Run **GNS3 core failover** on updated `main`, mode `apply`, with
+**capture_traceroute** checked. It captures both directions during baseline,
+backup and recovery, producing six records in `traceroutes.json`.
+The switch defaults to off, preserving the already validated test behavior.
+
+Each command uses numeric output, one probe per TTL, a one-second probe
+timeout and TTLs 1 through 4, with the local loopback as source:
+
+```text
+traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4
+```
+
+[IOS command syntax reference](https://www.cisco.com/c/dam/en/us/td/docs/ios/lisp/command/reference/LISP_command_reference_1514xb5-only.pdf).
+These diagnostic traces are retained for inspection; asterisk probe timeouts
+are not automatically classified as failed routing. Route and ping acceptance
+checks still determine path-test success. An IOS command rejection fails the
+run and triggers the same restoration cleanup. This option has local mock
+coverage for six captures and backup-phase command failure; live compatibility
+with the lab image still needs validation. It does not measure transition loss.

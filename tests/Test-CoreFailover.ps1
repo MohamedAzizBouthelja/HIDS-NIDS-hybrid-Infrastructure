@@ -35,8 +35,14 @@ function Send-IosCommand($Session, $Command) {
     if ($Command -in @('shutdown','no shutdown')) {
         if ($Session.Prompt -notmatch '\(config-if\)#$') { throw 'shutdown requires interface configuration mode' }
     }
-    elseif ($Command -match '^(show|ping) ' -and $inConfig) { throw 'show/ping requires EXEC mode in this workflow' }
+    elseif ($Command -match '^(show|ping|traceroute) ' -and $inConfig) { throw 'Diagnostics require EXEC mode in this workflow' }
     switch -Regex ($Command) {
+        '^traceroute (10\.255\.0\.[14]) numeric probe 1 source (10\.255\.0\.[14]) timeout 1 ttl 1 4$' {
+            if ($state.scenario -eq 'trace-error' -and $state.down) { throw 'IOS rejected traceroute' }
+            $destination = $Matches[1]
+            # Include a missing response to ensure raw diagnostic data survives.
+            return "Tracing the route to $destination`r`n  1 *`r`n  2 $destination 12 msec`r`n"
+        }
         '^shutdown$' {
             $state.down = $true; $state.cuts++
             if ($state.scenario -eq 'lost-shutdown-ack') { throw 'Lost shutdown acknowledgement' }
@@ -71,15 +77,16 @@ function Send-IosCommand($Session, $Command) {
     }
 }
 try {
-    foreach ($scenario in @('plan','success','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure')) {
+    foreach ($scenario in @('plan','success','trace-success','trace-error','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure')) {
         $global:FailoverMock = @{ scenario=$scenario; down=$false; cuts=0; restores=0; opens=0; closes=0; invalidEnds=0; backupReads=0; restoreFailed=$false; commands=[Collections.Generic.List[string]]::new() }
         $directory = Join-Path $testDirectory $scenario
         $mode = if ($scenario -eq 'plan') { 'plan' } else { 'apply' }
         $failed = $false
-        try { Invoke-CoreFailover -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 | Out-Null }
+        $capture = $scenario -in @('plan','trace-success','trace-error')
+        try { Invoke-CoreFailover -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 -CaptureTraceroute:$capture | Out-Null }
         catch { $failed = $true }
         $state = $global:FailoverMock
-        Assert-Failover ($failed -eq ($scenario -notin @('plan','success','delayed-backup','retry-restore'))) "$scenario status"
+        Assert-Failover ($failed -eq ($scenario -notin @('plan','success','trace-success','delayed-backup','retry-restore'))) "$scenario status"
         Assert-Failover ($state.closes -eq $state.opens) "$scenario closes all sessions"
         Assert-Failover ($state.invalidEnds -eq 0) "$scenario never sends end at EXEC"
         Assert-Failover (-not ($state.commands | Where-Object { $_ -match 'write memory|copy .*startup' })) "$scenario never saves"
@@ -88,8 +95,19 @@ try {
         if ($scenario -eq 'plan') { Assert-Failover ($state.opens -eq 0) 'Plan opens no consoles' }
         else {
             $evidence = Get-Content (Join-Path $directory 'result.json') -Raw | ConvertFrom-Json
-            Assert-Failover ($evidence.passed -eq ($scenario -in @('success','delayed-backup','retry-restore'))) "$scenario evidence accurately reports status"
+            Assert-Failover ($evidence.passed -eq ($scenario -in @('success','trace-success','delayed-backup','retry-restore'))) "$scenario evidence accurately reports status"
             if ($scenario -eq 'restore-failure') { Assert-Failover ($evidence.restoration_error -and -not $evidence.restored) 'Restoration failure recorded' }
+            if ($scenario -eq 'trace-success') {
+                $traceData = Get-Content (Join-Path $directory 'traceroutes.json') -Raw | ConvertFrom-Json
+                $traces = @($traceData | ForEach-Object { $_ })
+                Assert-Failover ($traces.Count -eq 6) 'Six traceroutes captured'
+                foreach ($phase in @('baseline','backup','recovery')) {
+                    $rows = @($traces | Where-Object { $_.phase -eq $phase })
+                    Assert-Failover ($rows.Count -eq 2 -and @($rows.router | Sort-Object -Unique).Count -eq 2) "$phase bidirectional trace capture"
+                }
+                Assert-Failover ($traces[0].output.Contains('1 *')) 'Timed-out probe remains diagnostic evidence'
+            }
+            if (-not $capture) { Assert-Failover (-not (Test-Path (Join-Path $directory 'traceroutes.json'))) 'No unsolicited trace capture' }
         }
         Write-Output "PASS: $scenario"
     }
