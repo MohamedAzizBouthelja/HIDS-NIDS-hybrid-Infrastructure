@@ -43,8 +43,10 @@ JSON files and metadata are [archived here](docs/evidence/2026-11-17/failover-su
 First valid backup polls occurred at 5.729 s on R1 and 6.029 s on R4.
 First valid recovery polls occurred at 18.823 s on R1 and 8.617 s on R4.
 These timers measure sequential route polling, not exact convergence or
-packet loss. Optional bounded traceroute capture is now implemented and
-tested locally, but still needs a live run. The tertiary backup, VLANs,
+packet loss. Optional traceroute capture is now verified from run 44156385861: six
+traces confirm both directions through R2, then R3, then R2 again. The
+[original artifact and inspection](docs/evidence/2026-11-17/failover-traceroute-success/README.md)
+are archived with source commit 3c9e910742530e61f6c23b386ce1ce69095ad53d. The tertiary backup, VLANs,
 firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
 
 | Work item | Status | Evidence |
@@ -65,6 +67,7 @@ firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
 | OSPF route, routed ping and primary-path checks | Verified from downloaded live artifact | Twelve exact OSPF routes, twelve 3/3 pings, primary next hops through R2 in both directions |
 | Complete OSPF job and final startup saves | User reports success; four saves verified in artifact | Four write memory outputs contain [OK]; reboot persistence has not been tested |
 | Controlled OSPF failover and primary recovery | Verified from live artifact | Run 44153014000: restored=true, passed=true; raw routes, up/up and six 3/3 ping results |
+| Traceroute during baseline, backup and recovery | Verified from live artifact | Six two-hop traces show R2, R3, R2 in both directions; run 44156385861 |
 | Live repeat-deployment verification | Pending final evidence | Existing objects were reused during troubleshooting; a complete successful repeat run remains to be recorded |
 | VLANs, managed switching, firewall, QoS, HIDS/NIDS and AWS/VPN | Not demonstrated | Architecture scope only at this checkpoint |
 
@@ -528,7 +531,7 @@ timestamps were not supplied in the artifact. A later user-supplied failover
 job excerpt confirms baseline and backup checks passed but restoration failed;
 see [the failure excerpt](docs/evidence/2026-11-17/failover-restoration-failure.txt).
 The corrected successful run is now archived with raw primary, backup and
-recovery evidence, commit SHA and timestamps. Traceroute remains unverified.
+recovery evidence, commit SHA and timestamps. Six traceroutes are now verified in the later run 44156385861.
 
 ## 6 Tests and evidence
 
@@ -618,13 +621,12 @@ Relevant commits present in the local repository:
 
 ## 8 Next actions
 
-1. Commit and push the successful failover archive and optional traceroute capture.
-2. Keep the runner and four routers online, and close manual consoles.
-3. Run **GNS3 core failover** on updated `main`, mode `apply`, with `capture_traceroute` enabled.
-4. Download the artifact and inspect its six traces in `traceroutes.json`.
-5. Measure packet loss and convergence separately; route polls do not establish these.
-6. Archive original interface job and repeat-deployment evidence if available.
-7. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.
+1. Commit and push the successful traceroute archive and updated documentation.
+2. Design a separate packet-loss/convergence experiment with continuous probes across transitions.
+3. Treat existing route-poll timers as observation latency, not exact convergence time.
+4. Verify the direct R1-R4 tertiary backup in a separate controlled experiment.
+5. Archive original interface job and repeat-deployment evidence if available.
+6. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.
 
 The failover workflow temporarily shuts only R1 FastEthernet0/0. Cleanup
 attempts `no shutdown` even after a failed test or lost shutdown acknowledgement.

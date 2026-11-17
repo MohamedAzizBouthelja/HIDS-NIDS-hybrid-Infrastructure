@@ -1,0 +1,15 @@
+﻿{
+    "started_utc":  "2026-11-17T19:16:10.4881610Z",
+    "plan":  "Temporarily shutdown R1 FastEthernet0/0; verify R1-R3-R4 in both directions; no shutdown; verify R1-R2-R4. No startup save.",
+    "shutdown_attempted":  true,
+    "restored":  true,
+    "passed":  true,
+    "error":  "",
+    "restoration_error":  "",
+    "commit_sha":  "3c9e910742530e61f6c23b386ce1ce69095ad53d",
+    "run_id":  "44156385861",
+    "run_attempt":  "1",
+    "capture_traceroute":  true,
+    "shutdown_utc":  "2026-11-17T19:16:17.5827651Z",
+    "finished_utc":  "2026-11-17T19:16:50.5851581Z"
+}

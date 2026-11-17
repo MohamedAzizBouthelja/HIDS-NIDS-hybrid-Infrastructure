@@ -1,0 +1,194 @@
+﻿[
+    {
+        "phase":  "baseline",
+        "attempt":  1,
+        "router":  "R1",
+        "valid":  true,
+        "elapsed_seconds":  0.4172632,
+        "utc":  "2026-11-17T19:16:13.8156990Z"
+    },
+    {
+        "phase":  "baseline",
+        "attempt":  1,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  0.7198055,
+        "utc":  "2026-11-17T19:16:14.1182854Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  1,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  0.3573668,
+        "utc":  "2026-11-17T19:16:18.5234186Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  1,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  0.8379899,
+        "utc":  "2026-11-17T19:16:19.0038794Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  2,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  3.1901153,
+        "utc":  "2026-11-17T19:16:21.3564985Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  2,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  3.5012746999999997,
+        "utc":  "2026-11-17T19:16:21.6674116Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  3,
+        "router":  "R1",
+        "valid":  true,
+        "elapsed_seconds":  5.8437225,
+        "utc":  "2026-11-17T19:16:24.0097259Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  3,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  6.1128804,
+        "utc":  "2026-11-17T19:16:24.2791089Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  1,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  0.42374799999999996,
+        "utc":  "2026-11-17T19:16:28.9033051Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  1,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  0.7371095,
+        "utc":  "2026-11-17T19:16:29.2163733Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  2,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  3.3803617,
+        "utc":  "2026-11-17T19:16:31.8596897Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  2,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  3.6984125999999997,
+        "utc":  "2026-11-17T19:16:32.1776198Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  3,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  5.9771997999999993,
+        "utc":  "2026-11-17T19:16:34.4568176Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  3,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  6.2273457,
+        "utc":  "2026-11-17T19:16:34.7071265Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  4,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  8.576962,
+        "utc":  "2026-11-17T19:16:37.0567493Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  4,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  8.9702965,
+        "utc":  "2026-11-17T19:16:37.4501922Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  5,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  11.1854184,
+        "utc":  "2026-11-17T19:16:39.6644595Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  5,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  11.5322956,
+        "utc":  "2026-11-17T19:16:40.0118135Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  6,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  13.875236,
+        "utc":  "2026-11-17T19:16:42.3547850Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  6,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  14.1693684,
+        "utc":  "2026-11-17T19:16:42.6492682Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  7,
+        "router":  "R1",
+        "valid":  false,
+        "elapsed_seconds":  16.6308902,
+        "utc":  "2026-11-17T19:16:45.1105589Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  7,
+        "router":  "R4",
+        "valid":  false,
+        "elapsed_seconds":  16.957738499999998,
+        "utc":  "2026-11-17T19:16:45.4366936Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  8,
+        "router":  "R1",
+        "valid":  true,
+        "elapsed_seconds":  19.233662,
+        "utc":  "2026-11-17T19:16:47.7133736Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  8,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  19.4671895,
+        "utc":  "2026-11-17T19:16:47.9470926Z"
+    }
+]

@@ -1,0 +1,69 @@
+{
+  "sha256": "eb887dbc0fc5bdc31706d7018ee41520dc48bff9420567b143a91cd4ee22e0b7",
+  "run_id": "44156385861",
+  "run_attempt": "1",
+  "run_url": "https://github.com/MohamedAzizBouthelja/HIDS-NIDS-hybrid-Infrastructure/actions/runs/44156385861",
+  "commit_sha": "3c9e910742530e61f6c23b386ce1ce69095ad53d",
+  "started_utc": "2026-11-17T19:16:10.4881610Z",
+  "finished_utc": "2026-11-17T19:16:50.5851581Z",
+  "inspection_date": "2026-11-17",
+  "verified_traceroutes": 6,
+  "verified_measured_pings_3_of_3": 6,
+  "verified_route_phases": [
+    "baseline",
+    "backup",
+    "recovery"
+  ],
+  "restored_up_up": true,
+  "hop_sequences": [
+    {
+      "phase": "baseline",
+      "router": "R1",
+      "hops": [
+        "10.0.12.2",
+        "10.0.24.2"
+      ]
+    },
+    {
+      "phase": "baseline",
+      "router": "R4",
+      "hops": [
+        "10.0.24.1",
+        "10.0.12.1"
+      ]
+    },
+    {
+      "phase": "backup",
+      "router": "R1",
+      "hops": [
+        "10.0.13.2",
+        "10.0.34.2"
+      ]
+    },
+    {
+      "phase": "backup",
+      "router": "R4",
+      "hops": [
+        "10.0.34.1",
+        "10.0.13.1"
+      ]
+    },
+    {
+      "phase": "recovery",
+      "router": "R1",
+      "hops": [
+        "10.0.12.2",
+        "10.0.24.2"
+      ]
+    },
+    {
+      "phase": "recovery",
+      "router": "R4",
+      "hops": [
+        "10.0.24.1",
+        "10.0.12.1"
+      ]
+    }
+  ],
+  "limitations": "No precise convergence measurement, transition packet-loss measurement or tertiary backup test. GitHub job metadata not independently queried."
+}

@@ -411,10 +411,10 @@ can leave only some routers saved. Inspect artifacts before resuming.
 
 The workflow is tested with simulated IOS state and actual local
 HTTP/Telnet connections. The successful downloaded live artifact now includes
-all four OSPF saves. Backup
-path availability, convergence time under failure, traceroute and packet
-captures require a later, separately triggered experiment. No ordinary
-OSPF deployment cuts links.
+all four OSPF saves. Separate failover artifacts now establish backup
+routing through R3, primary recovery and six traceroutes. Precise convergence,
+transition packet loss and packet captures remain future measurements.
+No ordinary OSPF deployment cuts links.
 
 For the dependency-free OSPF tests on Windows PowerShell:
 
@@ -424,8 +424,8 @@ For the dependency-free OSPF tests on Windows PowerShell:
 
 ## Next milestones
 
-1. Run the OSPF workflow in plan mode, then apply, then repeat apply.
-2. Collect baseline route and traceroute evidence before a controlled failover experiment.
+1. Preserve successful repeat-apply evidence for configuration idempotence.
+2. Measure transition packet loss and convergence; test the tertiary direct backup separately.
 3. Obtain a suitable managed switch image and implement the VLAN/access network.
 4. Compare OSPF and EIGRP in separate routing campaigns.
 5. Add routing experiments, QoS measurements, Suricata, Wazuh and Zabbix.
@@ -515,5 +515,8 @@ These diagnostic traces are retained for inspection; asterisk probe timeouts
 are not automatically classified as failed routing. Route and ping acceptance
 checks still determine path-test success. An IOS command rejection fails the
 run and triggers the same restoration cleanup. This option has local mock
-coverage for six captures and backup-phase command failure; live compatibility
-with the lab image still needs validation. It does not measure transition loss.
+coverage for six captures and backup-phase command failure. Live compatibility
+is now verified from run 44156385861: six two-hop traces show primary, backup
+and recovered paths in both directions. See the
+[successful traceroute archive](docs/evidence/2026-11-17/failover-traceroute-success/README.md).
+It does not measure transition loss.
