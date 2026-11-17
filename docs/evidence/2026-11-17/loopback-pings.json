@@ -1,0 +1,86 @@
+﻿[
+    {
+        "router":  "R1",
+        "source":  "10.255.0.1",
+        "destination":  "10.255.0.2",
+        "passed":  true,
+        "output":  "ping 10.255.0.2 source 10.255.0.1 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.2, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.1 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 4/32/48 ms\r\nR1#"
+    },
+    {
+        "router":  "R1",
+        "source":  "10.255.0.1",
+        "destination":  "10.255.0.3",
+        "passed":  true,
+        "output":  "ping 10.255.0.3 source 10.255.0.1 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.3, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.1 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 8/49/96 ms\r\nR1#"
+    },
+    {
+        "router":  "R1",
+        "source":  "10.255.0.1",
+        "destination":  "10.255.0.4",
+        "passed":  true,
+        "output":  "ping 10.255.0.4 source 10.255.0.1 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.4, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.1 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 8/69/108 ms\r\nR1#"
+    },
+    {
+        "router":  "R2",
+        "source":  "10.255.0.2",
+        "destination":  "10.255.0.1",
+        "passed":  true,
+        "output":  "ping 10.255.0.1 source 10.255.0.2 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.1, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.2 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 8/36/52 ms\r\nR2#"
+    },
+    {
+        "router":  "R2",
+        "source":  "10.255.0.2",
+        "destination":  "10.255.0.3",
+        "passed":  true,
+        "output":  "ping 10.255.0.3 source 10.255.0.2 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.3, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.2 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 40/89/116 ms\r\nR2#"
+    },
+    {
+        "router":  "R2",
+        "source":  "10.255.0.2",
+        "destination":  "10.255.0.4",
+        "passed":  true,
+        "output":  "ping 10.255.0.4 source 10.255.0.2 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.4, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.2 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 8/32/44 ms\r\nR2#"
+    },
+    {
+        "router":  "R3",
+        "source":  "10.255.0.3",
+        "destination":  "10.255.0.1",
+        "passed":  true,
+        "output":  "ping 10.255.0.1 source 10.255.0.3 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.1, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.3 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 8/44/76 ms\r\nR3#"
+    },
+    {
+        "router":  "R3",
+        "source":  "10.255.0.3",
+        "destination":  "10.255.0.2",
+        "passed":  true,
+        "output":  "ping 10.255.0.2 source 10.255.0.3 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.2, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.3 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 36/69/124 ms\r\nR3#"
+    },
+    {
+        "router":  "R3",
+        "source":  "10.255.0.3",
+        "destination":  "10.255.0.4",
+        "passed":  true,
+        "output":  "ping 10.255.0.4 source 10.255.0.3 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.4, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.3 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 16/29/40 ms\r\nR3#"
+    },
+    {
+        "router":  "R4",
+        "source":  "10.255.0.4",
+        "destination":  "10.255.0.1",
+        "passed":  true,
+        "output":  "ping 10.255.0.1 source 10.255.0.4 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.1, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.4 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 96/108/128 ms\r\nR4#"
+    },
+    {
+        "router":  "R4",
+        "source":  "10.255.0.4",
+        "destination":  "10.255.0.2",
+        "passed":  true,
+        "output":  "ping 10.255.0.2 source 10.255.0.4 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.2, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.4 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 8/25/40 ms\r\nR4#"
+    },
+    {
+        "router":  "R4",
+        "source":  "10.255.0.4",
+        "destination":  "10.255.0.3",
+        "passed":  true,
+        "output":  "ping 10.255.0.3 source 10.255.0.4 repeat 3 timeout 1\r\nType escape sequence to abort.\r\nSending 3, 100-byte ICMP Echos to 10.255.0.3, timeout is 1 seconds:\r\nPacket sent with a source address of 10.255.0.4 \r\n!!!\r\nSuccess rate is 100 percent (3/3), round-trip min/avg/max = 12/29/40 ms\r\nR4#"
+    }
+]

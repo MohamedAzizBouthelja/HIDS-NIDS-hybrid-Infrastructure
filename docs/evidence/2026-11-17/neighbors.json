@@ -1,0 +1,186 @@
+﻿[
+    {
+        "attempt":  1,
+        "router":  "R1",
+        "full":  true,
+        "parsed_neighbors":  [
+                                 {
+                                     "router_id":  "10.255.0.4",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.14.2",
+                                     "interface":  "FastEthernet2/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.3",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.13.2",
+                                     "interface":  "FastEthernet1/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.2",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.12.2",
+                                     "interface":  "FastEthernet0/0"
+                                 }
+                             ],
+        "output":  "show ip ospf neighbor\r\n\r\nNeighbor ID     Pri   State           Dead Time   Address         Interface\r\n10.255.0.4        0   FULL/  -        00:00:35    10.0.14.2       FastEthernet2/0\r\n10.255.0.3        0   FULL/  -        00:00:32    10.0.13.2       FastEthernet1/0\r\n10.255.0.2        0   FULL/  -        00:00:30    10.0.12.2       FastEthernet0/0\r\nR1#"
+    },
+    {
+        "attempt":  1,
+        "router":  "R2",
+        "full":  true,
+        "parsed_neighbors":  [
+                                 {
+                                     "router_id":  "10.255.0.4",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.24.2",
+                                     "interface":  "FastEthernet1/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.1",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.12.1",
+                                     "interface":  "FastEthernet0/0"
+                                 }
+                             ],
+        "output":  "show ip ospf neighbor\r\n\r\nNeighbor ID     Pri   State           Dead Time   Address         Interface\r\n10.255.0.4        0   FULL/  -        00:00:36    10.0.24.2       FastEthernet1/0\r\n10.255.0.1        0   FULL/  -        00:00:32    10.0.12.1       FastEthernet0/0\r\nR2#"
+    },
+    {
+        "attempt":  1,
+        "router":  "R3",
+        "full":  true,
+        "parsed_neighbors":  [
+                                 {
+                                     "router_id":  "10.255.0.4",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.34.2",
+                                     "interface":  "FastEthernet1/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.1",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.13.1",
+                                     "interface":  "FastEthernet0/0"
+                                 }
+                             ],
+        "output":  "show ip ospf neighbor\r\n\r\nNeighbor ID     Pri   State           Dead Time   Address         Interface\r\n10.255.0.4        0   FULL/  -        00:00:37    10.0.34.2       FastEthernet1/0\r\n10.255.0.1        0   FULL/  -        00:00:34    10.0.13.1       FastEthernet0/0\r\nR3#"
+    },
+    {
+        "attempt":  1,
+        "router":  "R4",
+        "full":  true,
+        "parsed_neighbors":  [
+                                 {
+                                     "router_id":  "10.255.0.1",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.14.1",
+                                     "interface":  "FastEthernet2/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.3",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.34.1",
+                                     "interface":  "FastEthernet1/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.2",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.24.1",
+                                     "interface":  "FastEthernet0/0"
+                                 }
+                             ],
+        "output":  "show ip ospf neighbor\r\n\r\nNeighbor ID     Pri   State           Dead Time   Address         Interface\r\n10.255.0.1        0   FULL/  -        00:00:37    10.0.14.1       FastEthernet2/0\r\n10.255.0.3        0   FULL/  -        00:00:36    10.0.34.1       FastEthernet1/0\r\n10.255.0.2        0   FULL/  -        00:00:34    10.0.24.1       FastEthernet0/0\r\nR4#"
+    },
+    {
+        "attempt":  2,
+        "router":  "R1",
+        "full":  true,
+        "parsed_neighbors":  [
+                                 {
+                                     "router_id":  "10.255.0.4",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.14.2",
+                                     "interface":  "FastEthernet2/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.3",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.13.2",
+                                     "interface":  "FastEthernet1/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.2",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.12.2",
+                                     "interface":  "FastEthernet0/0"
+                                 }
+                             ],
+        "output":  "show ip ospf neighbor\r\n\r\nNeighbor ID     Pri   State           Dead Time   Address         Interface\r\n10.255.0.4        0   FULL/  -        00:00:31    10.0.14.2       FastEthernet2/0\r\n10.255.0.3        0   FULL/  -        00:00:38    10.0.13.2       FastEthernet1/0\r\n10.255.0.2        0   FULL/  -        00:00:35    10.0.12.2       FastEthernet0/0\r\nR1#"
+    },
+    {
+        "attempt":  2,
+        "router":  "R2",
+        "full":  true,
+        "parsed_neighbors":  [
+                                 {
+                                     "router_id":  "10.255.0.4",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.24.2",
+                                     "interface":  "FastEthernet1/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.1",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.12.1",
+                                     "interface":  "FastEthernet0/0"
+                                 }
+                             ],
+        "output":  "show ip ospf neighbor\r\n\r\nNeighbor ID     Pri   State           Dead Time   Address         Interface\r\n10.255.0.4        0   FULL/  -        00:00:32    10.0.24.2       FastEthernet1/0\r\n10.255.0.1        0   FULL/  -        00:00:37    10.0.12.1       FastEthernet0/0\r\nR2#"
+    },
+    {
+        "attempt":  2,
+        "router":  "R3",
+        "full":  true,
+        "parsed_neighbors":  [
+                                 {
+                                     "router_id":  "10.255.0.4",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.34.2",
+                                     "interface":  "FastEthernet1/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.1",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.13.1",
+                                     "interface":  "FastEthernet0/0"
+                                 }
+                             ],
+        "output":  "show ip ospf neighbor\r\n\r\nNeighbor ID     Pri   State           Dead Time   Address         Interface\r\n10.255.0.4        0   FULL/  -        00:00:33    10.0.34.2       FastEthernet1/0\r\n10.255.0.1        0   FULL/  -        00:00:39    10.0.13.1       FastEthernet0/0\r\nR3#"
+    },
+    {
+        "attempt":  2,
+        "router":  "R4",
+        "full":  true,
+        "parsed_neighbors":  [
+                                 {
+                                     "router_id":  "10.255.0.1",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.14.1",
+                                     "interface":  "FastEthernet2/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.3",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.34.1",
+                                     "interface":  "FastEthernet1/0"
+                                 },
+                                 {
+                                     "router_id":  "10.255.0.2",
+                                     "state":  "FULL/-",
+                                     "address":  "10.0.24.1",
+                                     "interface":  "FastEthernet0/0"
+                                 }
+                             ],
+        "output":  "show ip ospf neighbor\r\n\r\nNeighbor ID     Pri   State           Dead Time   Address         Interface\r\n10.255.0.1        0   FULL/  -        00:00:32    10.0.14.1       FastEthernet2/0\r\n10.255.0.3        0   FULL/  -        00:00:32    10.0.34.1       FastEthernet1/0\r\n10.255.0.2        0   FULL/  -        00:00:39    10.0.24.1       FastEthernet0/0\r\nR4#"
+    }
+]

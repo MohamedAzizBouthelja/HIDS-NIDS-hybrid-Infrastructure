@@ -15,11 +15,11 @@ has created four routers and five links in Hybrid-Core-Lab. A supplied API
 artifact showed all four routers started, and the user confirmed their IOS
 consoles reached a prompt. The interface workflow then passed all ten
 directional neighbor ping tests and saved all four configurations (reported
-by the user). Live OSPF tables showed all ten expected directional FULL
-entries. The latest reported OSPF run reached `write memory` and stopped
-at an NVRAM overwrite confirmation. The save handler fix is prepared locally
-and requires live validation. The security stack, AWS and rollback
-verification remain pending.
+by the user). The successful downloaded OSPF artifact confirms ten directional FULL
+neighbors, twelve remote loopback routes, twelve routed 3/3 pings, primary
+next hops through R2 and four acknowledged configuration saves.
+See [the live evidence archive](docs/evidence/2026-11-17/README.md).
+The security stack, AWS and live failover validation remain pending.
 
 | Component | Location | Observed configuration |
 | --- | --- | --- |
@@ -409,9 +409,8 @@ rollback. Saving happens after verification, but a failure during saving
 can leave only some routers saved. Inspect artifacts before resuming.
 
 The workflow is tested with simulated IOS state and actual local
-HTTP/Telnet connections. A live run reached the save stage but stopped at
-the NVRAM confirmation. A complete live pass with all four OSPF saves is
-still pending. Backup
+HTTP/Telnet connections. The successful downloaded live artifact now includes
+all four OSPF saves. Backup
 path availability, convergence time under failure, traceroute and packet
 captures require a later, separately triggered experiment. No ordinary
 OSPF deployment cuts links.
@@ -447,3 +446,40 @@ the routed paths used for network measurements.
 - [Cisco OSPF neighbor command reference](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_ospf/command/iro-cr-book/ospf-s1.html)
 - [Cisco ping command reference](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/fundamentals/command/Cisco_IOS_Configuration_Fundamentals_Command_Reference/monitor_event-trace_through_Q.html)
 - [Manually running GitHub workflows](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+
+
+## Controlled OSPF failover
+
+After pushing these files, run **GNS3 core failover** on `main`, first in
+`plan`, then in `apply`. Keep all four routers and the runner running and
+close manual consoles. Plan validates the topology without opening consoles.
+
+Apply verifies primary next hops and loopback pings in both directions,
+then temporarily shuts **R1 FastEthernet0/0** (R1-R2). It requires R1 to use
+`10.0.13.2` and R4 to use `10.0.34.1`, both via FastEthernet1/0, with 3/3
+loopback pings in both directions. It restores the interface in cleanup,
+checks up/up, then verifies the primary next hops and pings again.
+
+No `write memory` is issued. Restoration is attempted after failures,
+including a lost shutdown acknowledgement, with a reconnect retry. Forced
+cancellation, process termination or a disconnected console can prevent
+restoration. If the result reports restoration failure, or the runner stops
+during the experiment, restore R1 manually:
+
+```text
+end
+configure terminal
+interface FastEthernet0/0
+no shutdown
+end
+```
+
+Download the `core-failover` artifact. `result.json` records success and
+restoration status; `observations.json` records route polling; the console
+transcript retains route and ping outputs. Poll elapsed times describe route
+observation latency, not precise convergence time or packet loss. The direct
+R1-R4 tertiary backup and traceroute are outside this experiment.
+
+Local verification: `./tests/Test-CoreFailover.ps1`. These mock tests cover
+preflight refusal, primary/backup/recovery paths, ping failure, lost shutdown
+acknowledgements and restoration failure. A live failover run is still needed.

@@ -1,0 +1,74 @@
+﻿[
+    {
+        "router":  "R1",
+        "destination":  "10.255.0.2",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.2\r\nRouting entry for 10.255.0.2/32\r\n  Known via \"ospf 10\", distance 110, metric 11, type intra area\r\n  Last update from 10.0.12.2 on FastEthernet0/0, 00:29:49 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.12.2, from 10.255.0.2, 00:29:49 ago, via FastEthernet0/0\r\n      Route metric is 11, traffic share count is 1\r\nR1#"
+    },
+    {
+        "router":  "R1",
+        "destination":  "10.255.0.3",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.3\r\nRouting entry for 10.255.0.3/32\r\n  Known via \"ospf 10\", distance 110, metric 31, type intra area\r\n  Last update from 10.0.13.2 on FastEthernet1/0, 00:29:39 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.13.2, from 10.255.0.3, 00:29:39 ago, via FastEthernet1/0\r\n      Route metric is 31, traffic share count is 1\r\nR1#"
+    },
+    {
+        "router":  "R1",
+        "destination":  "10.255.0.4",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.12.2 on FastEthernet0/0, 00:29:29 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.12.2, from 10.255.0.4, 00:29:29 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR1#"
+    },
+    {
+        "router":  "R2",
+        "destination":  "10.255.0.1",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 11, type intra area\r\n  Last update from 10.0.12.1 on FastEthernet0/0, 00:29:51 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.12.1, from 10.255.0.1, 00:29:51 ago, via FastEthernet0/0\r\n      Route metric is 11, traffic share count is 1\r\nR2#"
+    },
+    {
+        "router":  "R2",
+        "destination":  "10.255.0.3",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.3\r\nRouting entry for 10.255.0.3/32\r\n  Known via \"ospf 10\", distance 110, metric 41, type intra area\r\n  Last update from 10.0.24.2 on FastEthernet1/0, 00:29:31 ago\r\n  Routing Descriptor Blocks:\r\n    10.0.24.2, from 10.255.0.3, 00:29:31 ago, via FastEthernet1/0\r\n      Route metric is 41, traffic share count is 1\r\n  * 10.0.12.1, from 10.255.0.3, 00:29:41 ago, via FastEthernet0/0\r\n      Route metric is 41, traffic share count is 1\r\nR2#"
+    },
+    {
+        "router":  "R2",
+        "destination":  "10.255.0.4",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 11, type intra area\r\n  Last update from 10.0.24.2 on FastEthernet1/0, 00:29:31 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.2, from 10.255.0.4, 00:29:31 ago, via FastEthernet1/0\r\n      Route metric is 11, traffic share count is 1\r\nR2#"
+    },
+    {
+        "router":  "R3",
+        "destination":  "10.255.0.1",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 31, type intra area\r\n  Last update from 10.0.13.1 on FastEthernet0/0, 00:29:45 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.13.1, from 10.255.0.1, 00:29:45 ago, via FastEthernet0/0\r\n      Route metric is 31, traffic share count is 1\r\nR3#"
+    },
+    {
+        "router":  "R3",
+        "destination":  "10.255.0.2",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.2\r\nRouting entry for 10.255.0.2/32\r\n  Known via \"ospf 10\", distance 110, metric 41, type intra area\r\n  Last update from 10.0.34.2 on FastEthernet1/0, 00:29:35 ago\r\n  Routing Descriptor Blocks:\r\n    10.0.34.2, from 10.255.0.2, 00:29:35 ago, via FastEthernet1/0\r\n      Route metric is 41, traffic share count is 1\r\n  * 10.0.13.1, from 10.255.0.2, 00:29:45 ago, via FastEthernet0/0\r\n      Route metric is 41, traffic share count is 1\r\nR3#"
+    },
+    {
+        "router":  "R3",
+        "destination":  "10.255.0.4",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.4\r\nRouting entry for 10.255.0.4/32\r\n  Known via \"ospf 10\", distance 110, metric 31, type intra area\r\n  Last update from 10.0.34.2 on FastEthernet1/0, 00:29:35 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.34.2, from 10.255.0.4, 00:29:35 ago, via FastEthernet1/0\r\n      Route metric is 31, traffic share count is 1\r\nR3#"
+    },
+    {
+        "router":  "R4",
+        "destination":  "10.255.0.1",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.1\r\nRouting entry for 10.255.0.1/32\r\n  Known via \"ospf 10\", distance 110, metric 21, type intra area\r\n  Last update from 10.0.24.1 on FastEthernet0/0, 00:29:38 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.1, from 10.255.0.1, 00:29:38 ago, via FastEthernet0/0\r\n      Route metric is 21, traffic share count is 1\r\nR4#"
+    },
+    {
+        "router":  "R4",
+        "destination":  "10.255.0.2",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.2\r\nRouting entry for 10.255.0.2/32\r\n  Known via \"ospf 10\", distance 110, metric 11, type intra area\r\n  Last update from 10.0.24.1 on FastEthernet0/0, 00:29:38 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.24.1, from 10.255.0.2, 00:29:38 ago, via FastEthernet0/0\r\n      Route metric is 11, traffic share count is 1\r\nR4#"
+    },
+    {
+        "router":  "R4",
+        "destination":  "10.255.0.3",
+        "valid":  true,
+        "output":  "show ip route 10.255.0.3\r\nRouting entry for 10.255.0.3/32\r\n  Known via \"ospf 10\", distance 110, metric 31, type intra area\r\n  Last update from 10.0.34.1 on FastEthernet1/0, 00:29:38 ago\r\n  Routing Descriptor Blocks:\r\n  * 10.0.34.1, from 10.255.0.3, 00:29:38 ago, via FastEthernet1/0\r\n      Route metric is 31, traffic share count is 1\r\nR4#"
+    }
+]

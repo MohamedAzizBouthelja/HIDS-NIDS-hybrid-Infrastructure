@@ -1,0 +1,22 @@
+{
+  "archive": "core-ospf-43959781140-1.zip",
+  "sha256": "aa9acfd768a3908659d20c9c943007fa1b783cb15d86e549cd5f2fe6615e1a46",
+  "run_id_from_filename": "43959781140",
+  "run_attempt_from_filename": 1,
+  "run_url_from_filename": "https://github.com/MohamedAzizBouthelja/HIDS-NIDS-hybrid-Infrastructure/actions/runs/43959781140",
+  "commit_sha": null,
+  "execution_timestamp": null,
+  "inspection_date": "2026-11-17",
+  "provenance": "User-downloaded ZIP found in workspace; GitHub run metadata not independently queried. User reports workflow success.",
+  "full_neighbors": {
+    "R1": 3,
+    "R2": 2,
+    "R3": 2,
+    "R4": 3
+  },
+  "remote_routes": 12,
+  "routed_pings_3_of_3": 12,
+  "primary_next_hops_verified": true,
+  "save_acknowledgements": 4,
+  "failover_demonstrated": false
+}

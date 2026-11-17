@@ -1,6 +1,6 @@
 # HIDS NIDS Hybrid Infrastructure Progress
 
-Last updated: 16 November 2026, Africa/Tunis
+Last updated: 17 November 2026, Africa/Tunis
 
 Configuration reference at this checkpoint: commit
 `d40a5140c7b63ead4476ed528b41608fe84e81eb`. This is the repository version
@@ -26,16 +26,16 @@ incorrectly reported zero because it did not parse IOS's padded `FULL/  -`
 state. That parser is corrected in `d40a514`, with regression tests using
 the supplied tables.
 
-The latest reported OSPF rerun reached `write memory` and timed out while
-IOS requested confirmation to overwrite NVRAM written by a different
-image version. In the current script, saving is reached only after route,
-primary-next-hop and routed-ping checks pass. Their completion is inferred
-from reaching that code stage; their detailed live outputs have not yet
-been archived. Final OSPF startup persistence and a complete successful
-job remain unconfirmed. A narrowly scoped save-confirmation handler is now
-prepared locally and tested, but has not yet been validated in the live lab.
-VLANs,
-firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN deployment remain future work.
+The user reports the OSPF workflow passed. Inspection of the downloaded
+`core-ospf-43959781140-1.zip` confirms twelve remote OSPF /32 routes,
+twelve loopback-source pings at 3/3, primary next hops through R2 in both
+directions, and four `[OK]` save acknowledgements. The NVRAM confirmation
+handler is validated by the live R2/R3/R4 save transcripts. Reboot
+persistence remains a separate, untested property.
+
+A controlled failover workflow is now prepared and tested locally; its
+live run is pending. VLANs, firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN
+remain future work.
 
 | Work item | Status | Evidence |
 | --- | --- | --- |
@@ -52,14 +52,13 @@ firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN deployment remain future work.
 | Real core interface addresses and neighbor pings | Verified at the reported checkpoint | Ten endpoints up/up and ten directional tests at 3/3 required by the successful job; original result artifact has not been archived here |
 | OSPF neighbor formation | Confirmed by supplied live output | Ten FULL entries in the four raw tables archived below |
 | OSPF neighbor-state parser | Corrected and tested locally | Padded IOS state normalized; captured tables parse as 3/2/2/3 |
-| OSPF route, routed ping and primary-path checks | Save stage reached; detailed outputs still needed | Current code reaches `write memory` only after these checks pass; this is an inference from the reported save-stage error |
-| Complete OSPF job and final startup saves | Pending live validation | Latest failure is an NVRAM overwrite confirmation; not all four save acknowledgements have been supplied |
+| OSPF route, routed ping and primary-path checks | Verified from downloaded live artifact | Twelve exact OSPF routes, twelve 3/3 pings, primary next hops through R2 in both directions |
+| Complete OSPF job and final startup saves | User reports success; four saves verified in artifact | Four write memory outputs contain [OK]; reboot persistence has not been tested |
 | Live repeat-deployment verification | Pending final evidence | Existing objects were reused during troubleshooting; a complete successful repeat run remains to be recorded |
 | VLANs, managed switching, firewall, QoS, HIDS/NIDS and AWS/VPN | Not demonstrated | Architecture scope only at this checkpoint |
 
-Evidence archive: [16 November checkpoint](docs/evidence/2026-11-16/README.md).
-It preserves the supplied live neighbor output separately from generated
-simulation artifacts.
+Evidence archives: [historical failures and neighbor tables](docs/evidence/2026-11-16/README.md)
+and [successful OSPF baseline](docs/evidence/2026-11-17/README.md).
 
 ## 1 Environment and responsibilities
 
@@ -236,7 +235,7 @@ R1-R3 and R3-R4 have cost 30; the direct R1-R4 link has cost 100. This
 intends transit costs of 20 for the primary R1-R2-R4 path, 60 for the
 secondary R1-R3-R4 path and 100 for the direct backup. The supplied
 neighbor tables do not prove selected route metrics or next hops; the
-live routing-table verification is still to be recorded.
+live routing-table verification is now archived in the 17 November checkpoint.
 
 ### Complete physical interface register
 
@@ -286,8 +285,8 @@ of the router's complete running configuration.
 These addresses are the OSPF configuration targets, and the live tables
 confirm all four router IDs. Those tables alone do not prove Loopback0's
 running IP/mask, route advertisement, reachability or startup persistence.
-Direct loopback interface output and the corrected workflow's route/ping
-results still need to be retained. No VLAN subinterfaces, tunnels or other
+The successful artifact now retains remote /32 routes and loopback-source
+pings; a reboot persistence test remains pending. No VLAN subinterfaces, tunnels or other
 logical router interfaces have been deployed by the current workflows.
 
 ### Management and console endpoint register
@@ -405,8 +404,8 @@ it is a separate node, not the addressed core R1.
 | Old setup text mistaken for a current question | Reconnected console replay included historical setup/login text | Read the current terminal tail instead of rejecting matching words anywhere in the buffer | Subsequent live run advanced through console checks |
 | `Press RETURN to get started` rejected | The first Enter could precede IOS readiness | Permit up to two additional Enter presses at that exact initial prompt; continue rejecting password and yes/no questions | Interface workflow later passed live, as confirmed by the user |
 | OSPF command timed out despite a ready prompt | A `%LINEPROTO-5-UPDOWN` log split `no passive-interface FastEthernet1/0` in the command echo | Handle recognized structured IOS syslog while checking ordered echo characters, current prompt and command errors | Exact TCP reproduction passed; live OSPF run subsequently reached neighbor verification |
-| `neighbors=0` although all peer states were FULL | Parser required `FULL/-` and discarded IOS's padded `FULL/  -` rows | Normalize state whitespace; archive the captured tables; label counts `parsed_neighbors` and print raw tables on failure | Supplied live tables prove all ten FULL entries; corrected parser tests pass; complete corrected live job result still pending |
-| `write memory` waited at NVRAM `[confirm]` | IOS warned that the previous startup configuration was written by a different image version | Confirm only the exact warning after `write memory`, once; retain the output and require `[OK]`; reject other/repeated/bootstrap confirmations | Exact TCP reproduction and scope tests pass; live corrected save still pending |
+| `neighbors=0` although all peer states were FULL | Parser required `FULL/-` and discarded IOS's padded `FULL/  -` rows | Normalize state whitespace; archive the captured tables; label counts `parsed_neighbors` and print raw tables on failure | Supplied live tables prove all ten FULL entries; corrected parser tests pass; successful baseline artifact now archived on 17 November |
+| `write memory` waited at NVRAM `[confirm]` | IOS warned that the previous startup configuration was written by a different image version | Confirm only the exact warning after `write memory`, once; retain the output and require `[OK]`; reject other/repeated/bootstrap confirmations | Local tests pass; live R2/R3/R4 confirmation and all four [OK] saves archived on 17 November |
 
 The startup issue was diagnosed using the saved artifact instead of deleting
 and rebuilding the project. The corrected workflow reuses existing devices
@@ -499,7 +498,7 @@ This is ten directional observations across five unique adjacencies. The
 old job's `full: false` fields reflect its parser result, not the raw IOS
 state; the archive retains those fields to preserve that distinction.
 
-The checks whose detailed live evidence still needs to be retained are:
+The successful artifact now directly establishes:
 
 - Twelve exact remote loopback /32 routes learned through OSPF 10.
 - R1's route to `10.255.0.4` selects only `10.0.12.2` via
@@ -509,15 +508,12 @@ The checks whose detailed live evidence still needs to be retained are:
   separate warm-up.
 - Four OSPF configuration save acknowledgements from `write memory`.
 
-The earlier parser failure stopped before these checks. The latest reported
-rerun reached the save stage, which follows all route and ping checks in
-the code, and then waited at the NVRAM overwrite confirmation. This supports
-an inference that verification passed on that run; it does not substitute
-for the missing per-route and per-ping outputs or prove all four saves.
-The save error excerpt is preserved in the evidence archive. Interface
-baseline saving was confirmed earlier; persistence of the later OSPF
-changes remains unconfirmed. No failover, link cut, convergence timing or
-traceroute experiment has run in the supplied evidence.
+The earlier failures remain documented as history. The successful ZIP, its
+seven original JSON files, checksum and inspection summary are now archived
+in [the 17 November checkpoint](docs/evidence/2026-11-17/README.md).
+The filename identifies run 43959781140, attempt 1; commit SHA and execution
+timestamps were not supplied in the artifact. No failover or traceroute
+experiment has yet been demonstrated in live evidence.
 
 ## 6 Tests and evidence
 
@@ -555,12 +551,10 @@ Artifacts are retained by the workflows for seven days:
 | Core interfaces | Address plan, pre-change IOS interface backups, pending commands, applied-router record, console transcript and ping results |
 | Core OSPF | `ospf-plan.json`, `before-ospf.json`, `pending-commands.json`, `neighbors.json`, `routes.json`, `loopback-pings.json`, `console-transcript.json`; later-stage files exist only if execution reaches them |
 
-The artifacts used during this session were shared through job output and
-conversation. [The evidence checkpoint](docs/evidence/2026-11-16/README.md)
-now permanently records the four supplied neighbor tables and their
-provenance. It does not contain every historical artifact, the original ZIP,
-or the original interface ping/save logs. Those need to be downloaded from
-GitHub before retention expires if they are to be preserved as primary files.
+Historical supplied excerpts remain in the 16 November archive. The
+17 November archive contains the original successful OSPF ZIP and extracted
+JSON files. Original interface job logs and successful repeat-run evidence
+are still outstanding. Local `artifacts/` outputs remain simulations.
 
 ## 7 Repository files and recorded commits
 
@@ -609,16 +603,19 @@ Relevant commits present in the local repository:
 
 ## 8 Next actions
 
-1. Keep Hybrid-Core-Lab open, all four routers running and the runner online.
-2. Close manual console windows while automation is using them.
-3. Start a new **GNS3 core OSPF** run on the corrected `main`, mode `apply`.
-4. Retain the complete OSPF job result, route tables, twelve routed ping results and save acknowledgements.
-5. Archive the original successful interface job's ping/save artifacts if still available.
-6. Repeat successful workflows and retain evidence that matching configuration is skipped and devices/links are not duplicated.
-7. Capture baseline routes and traceroute before a separately triggered, controlled failover measurement.
-8. Obtain a suitable managed switch image and implement VLANs, trunks, RSTP and LACP.
-9. Continue with resilience measurements, a separate EIGRP campaign, QoS, Suricata,
-   Wazuh, Zabbix and finally the AWS/VPN phase.
+1. Commit and push the failover workflow and evidence documentation.
+2. Keep Hybrid-Core-Lab open, routers running and runner online; close manual consoles.
+3. Start **GNS3 core failover**, mode `plan`, then a new run in mode `apply`.
+4. Preserve `result.json`, `observations.json` and `console-transcript.json`.
+5. Confirm backup routing through R3 and primary recovery through R2 from live evidence.
+6. Add traceroute and packet-loss/convergence measurement as a separate experiment.
+7. Archive original interface job evidence and repeat-deployment evidence if available.
+8. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.
+
+The failover workflow temporarily shuts only R1 FastEthernet0/0. Cleanup
+attempts `no shutdown` even after a failed test or lost shutdown acknowledgement.
+It never saves the temporary shutdown. A killed runner/process cannot execute
+cleanup; in that case manually restore this interface before another run.
 
 No managed switch, firewall, security monitoring stack, AWS instance or VPN
 has been demonstrated in this session. Full hybrid infrastructure and
