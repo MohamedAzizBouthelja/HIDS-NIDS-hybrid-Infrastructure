@@ -52,8 +52,9 @@ function Send-IosCommand($Session, $Command) {
         $Session.Prompt = "$($Session.name)(config)#"
         return 'OK'
     }
-    if ($Command -eq 'interface FastEthernet0/0') {
+    if ($Command -match '^interface (FastEthernet[01]/0)$') {
         if (-not $inConfig) { throw 'interface requires configuration mode' }
+        $Session | Add-Member -NotePropertyName selectedInterface -NotePropertyValue $Matches[1] -Force
         $Session.Prompt = "$($Session.name)(config-if)#"
         return 'OK'
     }
@@ -69,19 +70,37 @@ function Send-IosCommand($Session, $Command) {
             return "Tracing the route to $destination`r`n  1 *`r`n  2 $destination 12 msec`r`n"
         }
         '^shutdown$' {
+            if ($Session.selectedInterface -eq 'FastEthernet1/0') {
+                $state.secondaryDown = $true
+                if ($state.scenario -eq 'direct-lost-ack') { throw 'Lost secondary shutdown acknowledgement' }
+                return 'OK'
+            }
             $state.down = $true; $state.cuts++
             if ($state.scenario -eq 'lost-shutdown-ack') { throw 'Lost shutdown acknowledgement' }
             return 'OK'
         }
         '^no shutdown$' {
+            if ($Session.selectedInterface -eq 'FastEthernet1/0') {
+                if ($state.scenario -eq 'direct-secondary-restore-failure') { throw 'Secondary restoration failed' }
+                $state.secondaryDown = $false
+                return 'OK'
+            }
             if ($state.scenario -eq 'restore-failure') { throw 'Restore transport failed' }
             if ($state.scenario -eq 'retry-restore' -and -not $state.restoreFailed) { $state.restoreFailed = $true; throw 'Lost restore acknowledgement' }
             $state.down = $false; $state.restores++; return 'OK'
         }
-        '^show running-config interface' { return "interface FastEthernet0/0`r`n ip address 10.0.12.1 255.255.255.252`r`n" }
+        '^show running-config interface (FastEthernet[01]/0)$' {
+            $address = if ($Matches[1] -eq 'FastEthernet0/0') { '10.0.12.1' } else { '10.0.13.1' }
+            return "interface $($Matches[1])`r`n ip address $address 255.255.255.252`r`n"
+        }
         '^show ip interface brief$' {
-            if ($state.scenario -eq 'initially-down' -or $state.down) { return 'FastEthernet0/0 10.0.12.1 YES manual administratively down down' }
-            return 'FastEthernet0/0 10.0.12.1 YES manual up up'
+            if ($Session.name -eq 'R4') {
+                if ($state.scenario -eq 'direct-preflight-failure') { return 'FastEthernet2/0 10.0.14.2 YES manual down down' }
+                return 'FastEthernet2/0 10.0.14.2 YES manual up up'
+            }
+            $primaryStatus = if ($state.scenario -eq 'initially-down' -or $state.down) { 'administratively down down' } else { 'up up' }
+            $secondaryStatus = if ($state.secondaryDown) { 'administratively down down' } else { 'up up' }
+            return "FastEthernet0/0 10.0.12.1 YES manual $primaryStatus`r`nFastEthernet1/0 10.0.13.1 YES manual $secondaryStatus`r`nFastEthernet2/0 10.0.14.1 YES manual up up"
         }
         '^show ip route ([0-9.]+)$' {
             $destination = $Matches[1]
@@ -92,6 +111,10 @@ function Send-IosCommand($Session, $Command) {
             if ($state.scenario -eq 'baseline-failure') { $backup = $true }
             $hop = if ($backup) { if ($Session.name -eq 'R1') { '10.0.13.2' } else { '10.0.34.1' } } else { if ($Session.name -eq 'R1') { '10.0.12.2' } else { '10.0.24.1' } }
             $interface = if ($backup) { 'FastEthernet1/0' } else { 'FastEthernet0/0' }
+            if ($state.down -and $state.secondaryDown -and $state.scenario -ne 'direct-wrong-path') {
+                $hop = if ($Session.name -eq 'R1') { '10.0.14.2' } else { '10.0.14.1' }
+                $interface = 'FastEthernet2/0'
+            }
             return "Routing entry for $destination/32`r`n Known via `"ospf 10`", distance 110, metric 21`r`n * $hop, from $destination, 00:00:01 ago, via $interface`r`n"
         }
         '^ping ' {
@@ -102,25 +125,27 @@ function Send-IosCommand($Session, $Command) {
     }
 }
 try {
-    foreach ($scenario in @('plan','success','measure','measure-console-failure','trace-success','trace-error','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure')) {
+    foreach ($scenario in @('plan','success','measure','measure-console-failure','trace-success','trace-error','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure','direct-plan','direct-success','direct-preflight-failure','direct-lost-ack','direct-wrong-path','direct-secondary-restore-failure')) {
         $global:FailoverMock = @{ scenario=$scenario; down=$false; cuts=0; restores=0; opens=0; closes=0; invalidEnds=0; backupReads=0; restoreFailed=$false; commands=[Collections.Generic.List[string]]::new() }
         $directory = Join-Path $testDirectory $scenario
-        $mode = if ($scenario -eq 'plan') { 'plan' } else { 'apply' }
+        $isPlan = $scenario -in @('plan','direct-plan')
+        $mode = if ($isPlan) { 'plan' } else { 'apply' }
         $failed = $false
         $capture = $scenario -in @('plan','trace-success','trace-error')
         $measure = $scenario -in @('measure','measure-console-failure','lost-shutdown-ack')
-        try { Invoke-CoreFailover -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 -CaptureTraceroute:$capture -MeasureLoss:$measure | Out-Null }
+        $direct = $scenario -like 'direct-*'
+        try { Invoke-CoreFailover -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 -CaptureTraceroute:$capture -MeasureLoss:$measure -TestDirectBackup:$direct | Out-Null }
         catch { $failed = $true }
         $state = $global:FailoverMock
-        $expectedSuccess = $scenario -in @('success','measure','trace-success','delayed-backup','retry-restore')
-        Assert-Failover ($failed -eq (-not ($expectedSuccess -or $scenario -eq 'plan'))) "$scenario status"
+        $expectedSuccess = $scenario -in @('success','measure','trace-success','delayed-backup','retry-restore','direct-success')
+        Assert-Failover ($failed -eq (-not ($expectedSuccess -or $isPlan))) "$scenario status"
         Assert-Failover (-not $state.probePhase) "$scenario releases the probe console"
         Assert-Failover ($state.closes -eq $state.opens) "$scenario closes all sessions"
         Assert-Failover ($state.invalidEnds -eq 0) "$scenario never sends end at EXEC"
         Assert-Failover (-not ($state.commands | Where-Object { $_ -match 'write memory|copy .*startup' })) "$scenario never saves"
-        if ($scenario -in @('plan','initially-down','baseline-failure')) { Assert-Failover ($state.cuts -eq 0) "$scenario cannot cut link" }
+        if ($isPlan -or $scenario -in @('initially-down','baseline-failure','direct-preflight-failure')) { Assert-Failover ($state.cuts -eq 0 -and -not $state.secondaryDown) "$scenario cannot cut link" }
         elseif ($scenario -ne 'restore-failure') { Assert-Failover (-not $state.down -and $state.restores -eq 1) "$scenario restores link even after failure" }
-        if ($scenario -eq 'plan') { Assert-Failover ($state.opens -eq 0) 'Plan opens no consoles' }
+        if ($isPlan) { Assert-Failover ($state.opens -eq 0) 'Plan opens no consoles' }
         else {
             $evidence = Get-Content (Join-Path $directory 'result.json') -Raw | ConvertFrom-Json
             Assert-Failover ($evidence.passed -eq $expectedSuccess) "$scenario evidence accurately reports status"
@@ -128,6 +153,17 @@ try {
                 Assert-Failover ($evidence.backup_probes.phase -eq 'backup' -and $evidence.recovery_probes.phase -eq 'recovery') 'Both probe summaries are archived'
             }
             if ($scenario -eq 'restore-failure') { Assert-Failover ($evidence.restoration_error -and -not $evidence.restored) 'Restoration failure recorded' }
+            if ($scenario -in @('direct-success','direct-lost-ack','direct-wrong-path')) {
+                Assert-Failover ($evidence.restored -and $evidence.links.primary.restored -and $evidence.links.secondary.restored -and -not $state.secondaryDown) "$scenario restores both links"
+            }
+            if ($scenario -eq 'direct-success') {
+                $polls = Get-Content (Join-Path $directory 'observations.json') -Raw | ConvertFrom-Json
+                $phases = @($polls | ForEach-Object { $_.phase } | Select-Object -Unique)
+                Assert-Failover (($phases -join ',') -eq 'baseline,backup,direct,secondary_recovery,recovery') 'All five routing checkpoints are verified in sequence'
+            }
+            if ($scenario -eq 'direct-secondary-restore-failure') {
+                Assert-Failover ($evidence.links.primary.restored -and -not $evidence.links.secondary.restored -and -not $evidence.restored -and $evidence.restoration_error) 'Primary restores even when secondary restoration fails'
+            }
             if ($scenario -eq 'trace-success') {
                 $traceData = Get-Content (Join-Path $directory 'traceroutes.json') -Raw | ConvertFrom-Json
                 $traces = @($traceData | ForEach-Object { $_ })

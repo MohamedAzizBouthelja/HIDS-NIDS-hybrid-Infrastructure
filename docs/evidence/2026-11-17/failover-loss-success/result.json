@@ -1,0 +1,37 @@
+﻿{
+    "started_utc":  "2026-11-17T19:39:01.3377641Z",
+    "plan":  "Temporarily shutdown R1 FastEthernet0/0; verify R1-R3-R4 in both directions; no shutdown; verify R1-R2-R4. No startup save.",
+    "shutdown_attempted":  true,
+    "restored":  true,
+    "passed":  true,
+    "error":  "",
+    "restoration_error":  "",
+    "commit_sha":  "545c520af8c5afd6809f9b8c9e3139a555ed4664",
+    "run_id":  "44160336159",
+    "run_attempt":  "1",
+    "capture_traceroute":  false,
+    "measure_loss":  true,
+    "shutdown_utc":  "2026-11-17T19:39:08.7961565Z",
+    "backup_probes":  {
+                          "samples_before":  3,
+                          "samples_overlapping_command_start":  0,
+                          "samples_after":  24,
+                          "replies_after":  19,
+                          "timeouts_after":  5,
+                          "first_reply_in_final_streak_seconds":  7.104,
+                          "final_reply_streak":  19
+                      },
+    "restore_command_utc":  [
+                                "2026-11-17T19:39:40.4109830Z"
+                            ],
+    "recovery_probes":  {
+                            "samples_before":  3,
+                            "samples_overlapping_command_start":  1,
+                            "samples_after":  25,
+                            "replies_after":  25,
+                            "timeouts_after":  0,
+                            "first_reply_in_final_streak_seconds":  1.315,
+                            "final_reply_streak":  25
+                        },
+    "finished_utc":  "2026-11-17T19:40:09.0304331Z"
+}

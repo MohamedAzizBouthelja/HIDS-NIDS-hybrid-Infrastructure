@@ -1,0 +1,50 @@
+﻿[
+    {
+        "phase":  "baseline",
+        "attempt":  1,
+        "router":  "R1",
+        "valid":  true,
+        "elapsed_seconds":  0.3534928,
+        "utc":  "2026-11-17T19:39:03.8731861Z"
+    },
+    {
+        "phase":  "baseline",
+        "attempt":  1,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  0.604765,
+        "utc":  "2026-11-17T19:39:04.1247289Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  1,
+        "router":  "R1",
+        "valid":  true,
+        "elapsed_seconds":  0.4649663,
+        "utc":  "2026-11-17T19:39:35.3658720Z"
+    },
+    {
+        "phase":  "backup",
+        "attempt":  1,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  0.7904607,
+        "utc":  "2026-11-17T19:39:35.6913405Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  1,
+        "router":  "R1",
+        "valid":  true,
+        "elapsed_seconds":  0.38406189999999996,
+        "utc":  "2026-11-17T19:40:07.0830371Z"
+    },
+    {
+        "phase":  "recovery",
+        "attempt":  1,
+        "router":  "R4",
+        "valid":  true,
+        "elapsed_seconds":  0.774833,
+        "utc":  "2026-11-17T19:40:07.4739117Z"
+    }
+]

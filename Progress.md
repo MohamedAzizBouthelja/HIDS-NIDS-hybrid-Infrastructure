@@ -68,6 +68,7 @@ firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
 | Complete OSPF job and final startup saves | User reports success; four saves verified in artifact | Four write memory outputs contain [OK]; reboot persistence has not been tested |
 | Controlled OSPF failover and primary recovery | Verified from live artifact | Run 44153014000: restored=true, passed=true; raw routes, up/up and six 3/3 ping results |
 | Traceroute during baseline, backup and recovery | Verified from live artifact | Six two-hop traces show R2, R3, R2 in both directions; run 44156385861 |
+| Sampled packet loss across failover and restoration | Verified from live artifact | Run 44160336159 recorded 5 consecutive timeouts in 24 post-shutdown probes and 0 in 25 post-restoration probes. See [the loss measurement archive](docs/evidence/2026-11-17/failover-loss-success/README.md). |
 | Live repeat-deployment verification | Pending final evidence | Existing objects were reused during troubleshooting; a complete successful repeat run remains to be recorded |
 | VLANs, managed switching, firewall, QoS, HIDS/NIDS and AWS/VPN | Not demonstrated | Architecture scope only at this checkpoint |
 
@@ -621,15 +622,14 @@ Relevant commits present in the local repository:
 
 ## 8 Next actions
 
-1. Commit and push the workflow changes for measuring packet loss.
-2. Run **GNS3 core failover** in `apply` mode with `measure_loss` enabled.
-3. Archive the live probe logs and compare backup and recovery timeout counts and time to sustained replies. The measurement mode has passed local testing.
-4. Verify the direct R1-R4 tertiary backup in a separate controlled experiment.
-5. Archive original interface job and repeat-deployment evidence if available.
-6. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.
+1. Commit and push the live loss measurement archive and updated documentation.
+2. Run **GNS3 core failover** in `apply` mode with `test_direct_backup` enabled. The direct path and both restoration steps have local test coverage and await live verification.
+3. Archive original interface job and repeat-deployment evidence if available.
+4. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.
 
-The failover workflow temporarily shuts only R1 FastEthernet0/0. Cleanup
-attempts `no shutdown` even after a failed test or lost shutdown acknowledgement.
+The default failover workflow temporarily shuts R1 FastEthernet0/0. The
+direct-backup option also shuts R1 FastEthernet1/0. Cleanup attempts
+`no shutdown` on each affected interface after a failed test or lost acknowledgement.
 It never saves the temporary shutdown. A killed runner/process cannot execute
 cleanup; in that case manually restore this interface before another run.
 

@@ -4,16 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Apply briefly shuts R1 FastEthernet0/0 and restores it
+        description: Plan or temporarily interrupt and restore the selected lab links
         type: choice
         options: [plan, apply]
         default: plan
       capture_traceroute:
-        description: Capture bounded traceroutes during baseline, backup and recovery
+        description: Capture bounded traceroutes at every route checkpoint
         type: boolean
         default: false
       measure_loss:
-        description: Sample ICMP throughout both link transitions
+        description: Sample ICMP around primary link shutdown and restoration
+        type: boolean
+        default: false
+      test_direct_backup:
+        description: Also shut the R1-R3 link temporarily to verify the direct R1-R4 backup
         type: boolean
         default: false
 
@@ -38,12 +42,13 @@ jobs:
           persist-credentials: false
       - name: Test failover and restoration logic
         run: ./tests/Test-CoreFailover.ps1
-      - name: Plan or exercise primary link failure
+      - name: Plan or exercise failover
         env:
           FAILOVER_MODE: ${{ inputs.mode }}
           CAPTURE_TRACEROUTE: ${{ inputs.capture_traceroute }}
           MEASURE_LOSS: ${{ inputs.measure_loss }}
-        run: ./scripts/Test-CoreFailover.ps1 -Mode $env:FAILOVER_MODE -CaptureTraceroute:($env:CAPTURE_TRACEROUTE -eq 'true') -MeasureLoss:($env:MEASURE_LOSS -eq 'true')
+          TEST_DIRECT_BACKUP: ${{ inputs.test_direct_backup }}
+        run: ./scripts/Test-CoreFailover.ps1 -Mode $env:FAILOVER_MODE -CaptureTraceroute:($env:CAPTURE_TRACEROUTE -eq 'true') -MeasureLoss:($env:MEASURE_LOSS -eq 'true') -TestDirectBackup:($env:TEST_DIRECT_BACKUP -eq 'true')
       - name: Save failover evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

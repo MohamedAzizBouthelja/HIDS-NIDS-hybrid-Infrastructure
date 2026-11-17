@@ -1,0 +1,47 @@
+{
+  "sha256": "30b0dba18a1c1ef652788f9db78c9836c0b4c00cb780181f4ef8b3d11b576439",
+  "run_id": "44160336159",
+  "run_attempt": "1",
+  "commit_sha": "545c520af8c5afd6809f9b8c9e3139a555ed4664",
+  "started_utc": "2026-11-17T19:39:01.3377641Z",
+  "finished_utc": "2026-11-17T19:40:09.0304331Z",
+  "direction": "R4 Loopback0 to R1 Loopback0, ICMP round trip",
+  "probe_windows": {
+    "backup": {
+      "samples_before": 3,
+      "samples_overlapping_command_start": 0,
+      "samples_after": 24,
+      "replies_after": 19,
+      "timeouts_after": 5,
+      "first_reply_in_final_streak_seconds": 7.104,
+      "final_reply_streak": 19,
+      "timeout_sequences": [
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "overlapping_reply_status": []
+    },
+    "recovery": {
+      "samples_before": 3,
+      "samples_overlapping_command_start": 1,
+      "samples_after": 25,
+      "replies_after": 25,
+      "timeouts_after": 0,
+      "first_reply_in_final_streak_seconds": 1.315,
+      "final_reply_streak": 25,
+      "timeout_sequences": [],
+      "overlapping_reply_status": [
+        true
+      ]
+    }
+  },
+  "route_and_ping_phases_verified": [
+    "baseline",
+    "backup",
+    "recovery"
+  ],
+  "restored_up_up": true
+}

@@ -7,6 +7,7 @@ function Invoke-CoreFailover {
         [string] $EvidenceDirectory,
         [switch] $CaptureTraceroute,
         [switch] $MeasureLoss,
+        [switch] $TestDirectBackup,
         [ValidateRange(1,120)][int] $Attempts = 40,
         [ValidateRange(0,10)][int] $PollSeconds = 2
     )
@@ -17,9 +18,12 @@ function Invoke-CoreFailover {
     $response = Invoke-RestMethod -Uri "$($ApiBaseUrl.TrimEnd('/'))/v2/projects/$($manifest.project.project_id)/nodes" -Method Get -TimeoutSec 15
     $nodes = @($response | ForEach-Object { $_ })
     $plan = 'Temporarily shutdown R1 FastEthernet0/0; verify R1-R3-R4 in both directions; no shutdown; verify R1-R2-R4. No startup save.'
+    if ($TestDirectBackup) {
+        $plan = 'Verify R1-R2-R4; shut R1 FastEthernet0/0 and verify R1-R3-R4; shut R1 FastEthernet1/0 and verify direct R1-R4; restore FastEthernet1/0 and verify R1-R3-R4; restore FastEthernet0/0 and verify R1-R2-R4. No startup save.'
+    }
     Write-Output $plan
-    if ($CaptureTraceroute) { Write-Output 'Traceroute capture enabled: both directions during baseline, backup and recovery; maximum TTL 4.' }
-    if ($MeasureLoss) { Write-Output 'R4 will probe the R1 loopback before and for 25 seconds after each transition, then path checks will run.' }
+    if ($CaptureTraceroute) { Write-Output 'Traceroute capture enabled in both directions at every route checkpoint; maximum TTL 4.' }
+    if ($MeasureLoss) { Write-Output 'R4 will probe the R1 loopback around the primary link shutdown and restoration, then path checks will run.' }
     if ($Mode -eq 'plan') { return }
     if (-not $EvidenceDirectory) { throw 'Apply requires an evidence directory.' }
     [void](New-Item -ItemType Directory -Path $EvidenceDirectory -Force)
@@ -33,6 +37,10 @@ function Invoke-CoreFailover {
     $result.run_attempt = $env:GITHUB_RUN_ATTEMPT
     $result.capture_traceroute = [bool]$CaptureTraceroute
     $result.measure_loss = [bool]$MeasureLoss
+    $result.test_direct_backup = [bool]$TestDirectBackup
+    $primary = [ordered]@{ interface = 'FastEthernet0/0'; address = '10.0.12.1'; shutdown_attempted = $false; restored = $false; restore_command_utc = @() }
+    $secondary = [ordered]@{ interface = 'FastEthernet1/0'; address = '10.0.13.1'; shutdown_attempted = $false; restored = $false; restore_command_utc = @() }
+    if ($TestDirectBackup) { $result.links = [ordered]@{ primary = $primary; secondary = $secondary } }
     $probe = $null
     function Save-FailoverEvidence {
         ConvertTo-Json -InputObject $transcript.ToArray() -Depth 12 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'console-transcript.json') -Encoding UTF8
@@ -45,16 +53,20 @@ function Invoke-CoreFailover {
         $transcript.Add([pscustomobject]@{ utc = [DateTime]::UtcNow.ToString('o'); router = $Name; command = $Command; output = $output })
         return $output
     }
-    function Wait-FailoverPath([string] $Phase, [bool] $Backup) {
+    function Wait-FailoverPath([string] $Phase, [ValidateSet('primary','secondary','direct')][string] $Path) {
+        $links = @{
+            primary = @{ interface = 'FastEthernet0/0'; R1 = '10.0.12.2'; R4 = '10.0.24.1' }
+            secondary = @{ interface = 'FastEthernet1/0'; R1 = '10.0.13.2'; R4 = '10.0.34.1' }
+            direct = @{ interface = 'FastEthernet2/0'; R1 = '10.0.14.2'; R4 = '10.0.14.1' }
+        }
+        $expected = $links[$Path]
         $timer = [Diagnostics.Stopwatch]::StartNew()
         for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
             $valid = $true
             foreach ($name in @('R1','R4')) {
                 $destination = if ($name -eq 'R1') { '10.255.0.4' } else { '10.255.0.1' }
-                $hop = if ($Backup) { if ($name -eq 'R1') { '10.0.13.2' } else { '10.0.34.1' } } else { if ($name -eq 'R1') { '10.0.12.2' } else { '10.0.24.1' } }
-                $iface = if ($Backup) { 'FastEthernet1/0' } else { 'FastEthernet0/0' }
                 $output = Invoke-FailoverCommand $name "show ip route $destination"
-                $ok = Test-CoreOspfRoute $output 10 ([pscustomobject]@{ next_hop = $hop; interface = $iface }) $destination
+                $ok = Test-CoreOspfRoute $output 10 ([pscustomobject]@{ next_hop = $expected[$name]; interface = $expected.interface }) $destination
                 $observations.Add([pscustomobject]@{ phase = $Phase; attempt = $attempt; router = $name; valid = $ok; elapsed_seconds = $timer.Elapsed.TotalSeconds; utc = [DateTime]::UtcNow.ToString('o') })
                 if (-not $ok) { $valid = $false }
             }
@@ -83,7 +95,31 @@ function Invoke-CoreFailover {
         }
         throw "$Phase did not reach the required unique next hops."
     }
-    function Restore-FailoverLink {
+    function Test-FailoverInterfaceUp([string] $Brief, [string] $Interface, [string] $Address) {
+        return $Brief -match ('(?m)^' + [regex]::Escape($Interface) + '[ \t]+' + [regex]::Escape($Address) + '[ \t]+YES[ \t]+\S+[ \t]+up[ \t]+up\s*\r?$')
+    }
+    function Assert-FailoverInterface($Link, [string] $Brief) {
+        $config = Invoke-FailoverCommand R1 "show running-config interface $($Link.interface)"
+        if ($config -notmatch ('(?m)^interface ' + [regex]::Escape($Link.interface) + '\s*\r?$') -or
+            $config -notmatch ('(?m)^\s*ip address ' + [regex]::Escape($Link.address) + ' 255\.255\.255\.252\s*\r?$') -or
+            $config -match '(?m)^\s*shutdown\s*\r?$' -or
+            -not (Test-FailoverInterfaceUp $Brief $Link.interface $Link.address)) {
+            throw "R1 $($Link.interface) does not match the active baseline."
+        }
+    }
+    function Disable-FailoverLink($Link) {
+        $null = Invoke-FailoverCommand R1 'configure terminal'
+        $null = Invoke-FailoverCommand R1 "interface $($Link.interface)"
+        # A lost acknowledgement can hide a successful change.
+        $Link.shutdown_attempted = $true
+        $result.shutdown_attempted = $true
+        Save-FailoverEvidence
+        $Link.shutdown_utc = [DateTime]::UtcNow.ToString('o')
+        if ($Link.interface -eq $primary.interface) { $result.shutdown_utc = $Link.shutdown_utc }
+        $null = Invoke-FailoverCommand R1 'shutdown'
+        $null = Invoke-FailoverCommand R1 'end'
+    }
+    function Restore-FailoverLink($Link) {
         # Retry through a fresh connection if an acknowledgement/connection was lost.
         for ($restoreAttempt = 1; $restoreAttempt -le 2; $restoreAttempt++) {
             try {
@@ -97,27 +133,40 @@ function Invoke-CoreFailover {
                 if ($sessions.R1.Prompt -match '\(') {
                     $null = Invoke-FailoverCommand R1 'end'
                 }
-                if ($sessions.R1.Prompt -notmatch '^[A-Za-z0-9_.:-]+#$') {
+                if ($sessions.R1.Prompt -cne 'R1#') {
                     throw 'Restoration requires a privileged EXEC prompt on R1.'
                 }
                 $null = Invoke-FailoverCommand R1 'configure terminal'
-                $null = Invoke-FailoverCommand R1 'interface FastEthernet0/0'
-                $result.restore_command_utc = @($result.restore_command_utc | Where-Object { $_ }) + @([DateTime]::UtcNow.ToString('o'))
+                $null = Invoke-FailoverCommand R1 "interface $($Link.interface)"
+                $Link.restore_command_utc += [DateTime]::UtcNow.ToString('o')
+                if ($Link.interface -eq $primary.interface) { $result.restore_command_utc = $Link.restore_command_utc }
                 $null = Invoke-FailoverCommand R1 'no shutdown'
                 $null = Invoke-FailoverCommand R1 'end'
                 $linkUp = $false
                 for ($linkAttempt = 0; $linkAttempt -lt 10; $linkAttempt++) {
                     $brief = Invoke-FailoverCommand R1 'show ip interface brief'
-                    if ($brief -match '(?m)^FastEthernet0/0\s+10\.0\.12\.1\s+YES\s+\S+\s+up\s+up\s*\r?$') { $linkUp = $true; break }
+                    if (Test-FailoverInterfaceUp $brief $Link.interface $Link.address) { $linkUp = $true; break }
                     Start-Sleep -Seconds $PollSeconds
                 }
-                if (-not $linkUp) { throw 'Restored R1 interface is not up/up.' }
-                $result.restored = $true
-                Write-Output 'RESTORED: R1 FastEthernet0/0 is up/up.'
+                if (-not $linkUp) { throw "Restored R1 $($Link.interface) is not up/up." }
+                $Link.restored = $true
+                Write-Output "RESTORED: R1 $($Link.interface) is up/up."
                 return
             }
             catch { if ($restoreAttempt -eq 2) { throw } }
         }
+    }
+    function Restore-FailoverLinks {
+        $errors = @()
+        foreach ($link in @($secondary, $primary)) {
+            if ($link.shutdown_attempted -and -not $link.restored) {
+                try { Restore-FailoverLink $link }
+                catch { $errors += "$($link.interface): $($_.Exception.Message)" }
+            }
+        }
+        $result.restored = $result.shutdown_attempted -and $errors.Count -eq 0
+        $result.restoration_error = $errors -join ' | '
+        if ($errors.Count -gt 0) { throw $result.restoration_error }
     }
     try {
         $consoleEndpoints = @{}
@@ -130,23 +179,20 @@ function Invoke-CoreFailover {
             $sessions[$name] = Open-IosConsole $node[0].console_host $node[0].console
             if ($sessions[$name].Prompt -cne "$name#") { throw "Expected $name# at $endpoint. Check the GNS3 console mapping." }
         }
-        $config = Invoke-FailoverCommand R1 'show running-config interface FastEthernet0/0'
         $brief = Invoke-FailoverCommand R1 'show ip interface brief'
-        if ($config -notmatch '(?m)^interface FastEthernet0/0\s*\r?$' -or
-            $config -notmatch '(?m)^\s*ip address 10\.0\.12\.1 255\.255\.255\.252\s*\r?$' -or
-            $config -match '(?m)^\s*shutdown\s*\r?$' -or
-            $brief -notmatch '(?m)^FastEthernet0/0\s+10\.0\.12\.1\s+YES\s+\S+\s+up\s+up\s*\r?$') { throw 'R1 primary interface does not match the active baseline.' }
-        Wait-FailoverPath baseline $false
+        Assert-FailoverInterface $primary $brief
+        if ($TestDirectBackup) {
+            Assert-FailoverInterface $secondary $brief
+            $r4Brief = Invoke-FailoverCommand R4 'show ip interface brief'
+            if (-not (Test-FailoverInterfaceUp $brief 'FastEthernet2/0' '10.0.14.1') -or
+                -not (Test-FailoverInterfaceUp $r4Brief 'FastEthernet2/0' '10.0.14.2')) {
+                throw 'Direct R1–R4 link must be up/up at both endpoints before the test.'
+            }
+        }
+        Wait-FailoverPath baseline primary
         if ($MeasureLoss) { $probe = Start-FailoverProbes $sessions.R4 $EvidenceDirectory 'backup' }
-        $null = Invoke-FailoverCommand R1 'configure terminal'
-        $null = Invoke-FailoverCommand R1 'interface FastEthernet0/0'
-        # Arm cleanup BEFORE sending shutdown: a lost acknowledgement may hide a successful change.
-        $result.shutdown_attempted = $true
-        Save-FailoverEvidence
         try {
-            $result.shutdown_utc = [DateTime]::UtcNow.ToString('o')
-            $null = Invoke-FailoverCommand R1 'shutdown'
-            $null = Invoke-FailoverCommand R1 'end'
+            Disable-FailoverLink $primary
             if ($MeasureLoss) {
                 Wait-FailoverProbeWindow $probe
                 $completedProbe = $probe
@@ -154,10 +200,21 @@ function Invoke-CoreFailover {
                 Stop-FailoverProbes $completedProbe
                 $result.backup_probes = Get-FailoverProbeSummary $completedProbe.output_path $result.shutdown_utc
             }
-            Wait-FailoverPath backup $true
+            Wait-FailoverPath backup secondary
+            if ($TestDirectBackup) {
+                Disable-FailoverLink $secondary
+                $cutBrief = Invoke-FailoverCommand R1 'show ip interface brief'
+                foreach ($link in @($primary, $secondary)) {
+                    $downPattern = '(?m)^' + [regex]::Escape($link.interface) + '[ \t]+' + [regex]::Escape($link.address) + '[ \t]+YES[ \t]+\S+[ \t]+administratively down[ \t]+down\s*\r?$'
+                    if ($cutBrief -notmatch $downPattern) { throw "R1 $($link.interface) is not administratively down." }
+                }
+                Wait-FailoverPath direct direct
+                Restore-FailoverLink $secondary
+                Wait-FailoverPath secondary_recovery secondary
+            }
             if ($MeasureLoss) { $probe = Start-FailoverProbes $sessions.R4 $EvidenceDirectory 'recovery' }
         }
-        finally { Restore-FailoverLink }
+        finally { Restore-FailoverLinks }
         if ($MeasureLoss) {
             Wait-FailoverProbeWindow $probe
             $completedProbe = $probe
@@ -165,7 +222,7 @@ function Invoke-CoreFailover {
             Stop-FailoverProbes $completedProbe
             $result.recovery_probes = Get-FailoverProbeSummary $completedProbe.output_path $result.restore_command_utc[0]
         }
-        Wait-FailoverPath recovery $false
+        Wait-FailoverPath recovery primary
         $result.passed = $true
     }
     catch {
@@ -175,10 +232,14 @@ function Invoke-CoreFailover {
     finally {
         try {
             if ($result.shutdown_attempted -and -not $result.restored) {
-                try { Restore-FailoverLink }
+                try { Restore-FailoverLinks }
                 catch {
                     $result.restoration_error = $_.Exception.Message
-                    Write-Warning 'RESTORATION FAILED: at R1# run configure terminal, interface FastEthernet0/0, no shutdown, end. If already in configuration mode, use end first.'
+                    foreach ($link in @($secondary, $primary)) {
+                        if ($link.shutdown_attempted -and -not $link.restored) {
+                            Write-Warning "RESTORATION FAILED: on R1, restore $($link.interface) with no shutdown. See the manual recovery steps in README.md."
+                        }
+                    }
                 }
             }
             if ($null -ne $probe) {
@@ -192,5 +253,6 @@ function Invoke-CoreFailover {
         finally { $result.finished_utc = [DateTime]::UtcNow.ToString('o'); Save-FailoverEvidence }
     }
     Write-Output 'VERIFIED: primary baseline, backup through R3, primary recovery; no configuration saved. Timing is route observation latency, not packet-loss convergence.'
-    if ($CaptureTraceroute) { Write-Output 'CAPTURED: six diagnostic traceroutes; inspect traceroutes.json for hop responses and timeouts.' }
+    if ($TestDirectBackup) { Write-Output 'VERIFIED: direct R1-R4 backup in both directions and both transit interfaces restored.' }
+    if ($CaptureTraceroute) { Write-Output "CAPTURED: $($traces.Count) diagnostic traceroutes; inspect traceroutes.json for hop responses and timeouts." }
 }

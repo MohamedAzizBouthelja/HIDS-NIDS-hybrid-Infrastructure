@@ -412,8 +412,9 @@ can leave only some routers saved. Inspect artifacts before resuming.
 The workflow is tested with simulated IOS state and actual local
 HTTP/Telnet connections. The successful downloaded live artifact now includes
 all four OSPF saves. Separate failover artifacts now establish backup
-routing through R3, primary recovery and six traceroutes. Precise convergence,
-transition packet loss and packet captures remain future measurements.
+routing through R3, primary recovery and six traceroutes. A separate
+live run measured sampled packet loss across both transitions. Exact OSPF
+convergence timing and packet captures remain open.
 No ordinary OSPF deployment cuts links.
 
 For the dependency-free OSPF tests on Windows PowerShell:
@@ -425,7 +426,7 @@ For the dependency-free OSPF tests on Windows PowerShell:
 ## Next milestones
 
 1. Preserve successful repeat-apply evidence for configuration idempotence.
-2. Measure transition packet loss and convergence; test the tertiary direct backup separately.
+2. Test the tertiary direct backup separately.
 3. Obtain a suitable managed switch image and implement the VLAN/access network.
 4. Compare OSPF and EIGRP in separate routing campaigns.
 5. Add routing experiments, QoS measurements, Suricata, Wazuh and Zabbix.
@@ -554,3 +555,37 @@ If there were no sampled timeouts, report zero observed timeouts for the
 sampled direction. An interruption between probes can escape detection.
 The interval includes IOS command and console delays, and subsequent route
 polls verify the selected path after the measurement window.
+
+The [live measurement archive](docs/evidence/2026-11-17/failover-loss-success/README.md)
+records five consecutive timeouts in 24 post-shutdown probes and zero
+timeouts in 25 post-restoration probes. The first sustained reply was read
+7.104 seconds after the shutdown command started.
+
+### Verify the direct R1–R4 backup
+
+Run **GNS3 core failover** on the updated branch in `apply` mode with
+**test_direct_backup** checked. Keep both console windows closed. The script
+checks the direct link at both endpoints before changing either transit link.
+
+| Checkpoint | R1 interface change | Expected path |
+| --- | --- | --- |
+| Baseline | None | R1–R2–R4 |
+| Backup | Shut FastEthernet0/0 toward R2 | R1–R3–R4 |
+| Direct | Also shut FastEthernet1/0 toward R3 | R1–R4 via FastEthernet2/0 |
+| Secondary recovery | Restore FastEthernet1/0 | R1–R3–R4 |
+| Primary recovery | Restore FastEthernet0/0 | R1–R2–R4 |
+
+Each checkpoint requires the unique OSPF next hop and 3/3 loopback pings
+in both directions. The direct-phase next hops must be `10.0.14.2` on R1
+and `10.0.14.1` on R4. The direct interface stays up throughout the test.
+**capture_traceroute** adds ten traces across the five checkpoints.
+**measure_loss** samples the primary shutdown and restoration only.
+
+Download the workflow artifact and check `result.json` for `passed`,
+`restored`, and each link’s restoration status under `links`.
+`observations.json` and `console-transcript.json` contain the route and
+console evidence. The workflow attempts to restore each shutdown interface
+even if restoring the other one fails. If the runner is stopped or cleanup
+fails, check `show ip interface brief` on R1. Use the manual restore procedure
+above for each affected interface, substituting `FastEthernet1/0` where needed.
+The workflow makes no startup configuration save.
