@@ -113,16 +113,22 @@ function Invoke-CoreFailover {
                 }
                 if (-not $linkUp) { throw 'Restored R1 interface is not up/up.' }
                 $result.restored = $true
+                Write-Output 'RESTORED: R1 FastEthernet0/0 is up/up.'
                 return
             }
             catch { if ($restoreAttempt -eq 2) { throw } }
         }
     }
     try {
+        $consoleEndpoints = @{}
         foreach ($name in @('R1','R4')) {
             $node = @($nodes | Where-Object { $_.name -eq $name })
             if ($node.Count -ne 1) { throw "Missing or duplicate $name." }
+            $endpoint = '{0}:{1}' -f $node[0].console_host, $node[0].console
+            if ($consoleEndpoints.ContainsKey($endpoint)) { throw "R1 and R4 share console endpoint $endpoint." }
+            $consoleEndpoints[$endpoint] = $true
             $sessions[$name] = Open-IosConsole $node[0].console_host $node[0].console
+            if ($sessions[$name].Prompt -cne "$name#") { throw "Expected $name# at $endpoint. Check the GNS3 console mapping." }
         }
         $config = Invoke-FailoverCommand R1 'show running-config interface FastEthernet0/0'
         $brief = Invoke-FailoverCommand R1 'show ip interface brief'
@@ -142,7 +148,7 @@ function Invoke-CoreFailover {
             $null = Invoke-FailoverCommand R1 'shutdown'
             $null = Invoke-FailoverCommand R1 'end'
             if ($MeasureLoss) {
-                Start-Sleep -Seconds 25
+                Wait-FailoverProbeWindow $probe
                 $completedProbe = $probe
                 $probe = $null
                 Stop-FailoverProbes $completedProbe
@@ -153,7 +159,7 @@ function Invoke-CoreFailover {
         }
         finally { Restore-FailoverLink }
         if ($MeasureLoss) {
-            Start-Sleep -Seconds 25
+            Wait-FailoverProbeWindow $probe
             $completedProbe = $probe
             $probe = $null
             Stop-FailoverProbes $completedProbe

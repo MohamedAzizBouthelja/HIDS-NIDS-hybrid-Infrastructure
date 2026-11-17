@@ -524,6 +524,9 @@ It does not measure transition loss.
 ### Measure packet loss during failover
 
 Run **GNS3 core failover** in `apply` mode with **measure_loss** checked.
+Close the GNS3 console windows for R1 and R4 and stop any separate scripts
+using those consoles before the run. Both workflow options can be enabled
+together. Leave traceroute capture unchecked to collect only the loss experiment.
 The sampler sends single loopback-sourced pings from R4 to R1 at roughly
 one-second intervals. Each window starts with three consecutive replies,
 continues across the R1 link command, and runs for at least another 25 seconds
@@ -537,6 +540,12 @@ replies and timeouts for probes whose commands started at or after the
 transition command. Probes in flight at command start are counted separately
 and retained in the raw log. Recovery uses the first `no shutdown` command
 timestamp and retains any retry timestamps.
+
+If IOS console output is malformed or the prompt times out, the sampler
+records a `console_error` with a null reply and aborts the window. Check
+`shutdown_attempted` and `restored` in `result.json`. If shutdown was
+attempted and restoration is false, verify R1 FastEthernet0/0 and follow
+the manual restore steps above if the interface is administratively down.
 
 `first_reply_in_final_streak_seconds` estimates when sustained reachability
 returned, using the first response in a final streak of at least three

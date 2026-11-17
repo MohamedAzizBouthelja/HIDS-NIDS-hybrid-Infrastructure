@@ -28,7 +28,10 @@ function Get-FailoverProbeSummary($Path, $EventUtc) {
     Assert-Failover (-not $global:FailoverMock.probePhase -and $EventUtc) 'Summary follows sampler completion and has a command timestamp'
     return @{ phase = $Path }
 }
-function Start-Sleep { param([int] $Seconds) }
+function Wait-FailoverProbeWindow($Probe) {
+    Assert-Failover ($global:FailoverMock.probePhase -eq $Probe.output_path) 'Probe window waits on the active worker'
+    if ($global:FailoverMock.scenario -eq 'measure-console-failure') { throw 'R4 probe console failed during backup' }
+}
 function Send-IosCommand($Session, $Command) {
     $state = $global:FailoverMock
     Assert-Failover (-not ($state.probePhase -and $Session.name -eq 'R4')) 'Foreground commands must wait for the R4 probe worker'
@@ -99,13 +102,13 @@ function Send-IosCommand($Session, $Command) {
     }
 }
 try {
-    foreach ($scenario in @('plan','success','measure','trace-success','trace-error','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure')) {
+    foreach ($scenario in @('plan','success','measure','measure-console-failure','trace-success','trace-error','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure')) {
         $global:FailoverMock = @{ scenario=$scenario; down=$false; cuts=0; restores=0; opens=0; closes=0; invalidEnds=0; backupReads=0; restoreFailed=$false; commands=[Collections.Generic.List[string]]::new() }
         $directory = Join-Path $testDirectory $scenario
         $mode = if ($scenario -eq 'plan') { 'plan' } else { 'apply' }
         $failed = $false
         $capture = $scenario -in @('plan','trace-success','trace-error')
-        $measure = $scenario -in @('measure','lost-shutdown-ack')
+        $measure = $scenario -in @('measure','measure-console-failure','lost-shutdown-ack')
         try { Invoke-CoreFailover -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 -CaptureTraceroute:$capture -MeasureLoss:$measure | Out-Null }
         catch { $failed = $true }
         $state = $global:FailoverMock
