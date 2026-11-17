@@ -33,8 +33,12 @@ directions, and four `[OK]` save acknowledgements. The NVRAM confirmation
 handler is validated by the live R2/R3/R4 save transcripts. Reboot
 persistence remains a separate, untested property.
 
-A controlled failover workflow is now prepared and tested locally; its
-live run is pending. VLANs, firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN
+A controlled failover run passed primary baseline and backup path checks,
+according to supplied live job output, then failed restoration. The workflow
+sent `end` at `R1#`, where IOS attempted hostname lookup. The local fix sends
+`end` only in configuration mode; mode-aware regression tests pass. Manual
+link restoration and a successful new live recovery check remain unconfirmed.
+VLANs, firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN
 remain future work.
 
 | Work item | Status | Evidence |
@@ -512,8 +516,10 @@ The earlier failures remain documented as history. The successful ZIP, its
 seven original JSON files, checksum and inspection summary are now archived
 in [the 17 November checkpoint](docs/evidence/2026-11-17/README.md).
 The filename identifies run 43959781140, attempt 1; commit SHA and execution
-timestamps were not supplied in the artifact. No failover or traceroute
-experiment has yet been demonstrated in live evidence.
+timestamps were not supplied in the artifact. A later user-supplied failover
+job excerpt confirms baseline and backup checks passed but restoration failed;
+see [the failure excerpt](docs/evidence/2026-11-17/failover-restoration-failure.txt).
+Primary recovery and traceroute remain unverified.
 
 ## 6 Tests and evidence
 
@@ -603,14 +609,15 @@ Relevant commits present in the local repository:
 
 ## 8 Next actions
 
-1. Commit and push the failover workflow and evidence documentation.
-2. Keep Hybrid-Core-Lab open, routers running and runner online; close manual consoles.
-3. Start **GNS3 core failover**, mode `plan`, then a new run in mode `apply`.
-4. Preserve `result.json`, `observations.json` and `console-transcript.json`.
-5. Confirm backup routing through R3 and primary recovery through R2 from live evidence.
-6. Add traceroute and packet-loss/convergence measurement as a separate experiment.
-7. Archive original interface job evidence and repeat-deployment evidence if available.
-8. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.
+1. Manually restore R1 FastEthernet0/0 with `no shutdown` before another run.
+2. Commit and push the failover restoration fix and evidence documentation.
+3. Keep Hybrid-Core-Lab open, routers running and runner online; close manual consoles.
+4. Start a new **GNS3 core failover** run on the updated `main` in mode `apply`.
+5. Preserve `result.json`, `observations.json` and `console-transcript.json`.
+6. Confirm backup routing through R3 and primary recovery through R2 from live evidence.
+7. Add traceroute and packet-loss/convergence measurement as a separate experiment.
+8. Archive original interface job evidence and repeat-deployment evidence if available.
+9. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.
 
 The failover workflow temporarily shuts only R1 FastEthernet0/0. Cleanup
 attempts `no shutdown` even after a failed test or lost shutdown acknowledgement.

@@ -74,7 +74,14 @@ function Invoke-CoreFailover {
                     $node = @($nodes | Where-Object { $_.name -eq 'R1' })[0]
                     $sessions.R1 = Open-IosConsole $node.console_host $node.console
                 }
-                $null = Invoke-FailoverCommand R1 'end'
+                # end is valid only in configuration mode. At EXEC IOS treats
+                # it as a hostname and may spend a minute attempting DNS.
+                if ($sessions.R1.Prompt -match '\(') {
+                    $null = Invoke-FailoverCommand R1 'end'
+                }
+                if ($sessions.R1.Prompt -notmatch '^[A-Za-z0-9_.:-]+#$') {
+                    throw 'Restoration requires a privileged EXEC prompt on R1.'
+                }
                 $null = Invoke-FailoverCommand R1 'configure terminal'
                 $null = Invoke-FailoverCommand R1 'interface FastEthernet0/0'
                 $null = Invoke-FailoverCommand R1 'no shutdown'
@@ -130,7 +137,7 @@ function Invoke-CoreFailover {
                 try { Restore-FailoverLink }
                 catch {
                     $result.restoration_error = $_.Exception.Message
-                    Write-Warning 'RESTORATION FAILED: manually run end, configure terminal, interface FastEthernet0/0, no shutdown, end on R1.'
+                    Write-Warning 'RESTORATION FAILED: at R1# run configure terminal, interface FastEthernet0/0, no shutdown, end. If already in configuration mode, use end first.'
                 }
             }
             foreach ($session in @($sessions.Values)) {

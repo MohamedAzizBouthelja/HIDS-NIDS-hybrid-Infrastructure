@@ -1,0 +1,18 @@
+Provenance: selected lines transcribed from user-supplied live job output,
+17 November 2026. Not an original downloaded job log. Run ID and commit
+were not supplied. Full successful recovery has not been reported.
+
+PASS: baseline unique next hops and bidirectional loopback pings.
+PASS: backup unique next hops and bidirectional loopback pings.
+RESTORATION FAILED
+IOS rejected 'end': end
+Translating "end"...domain server (255.255.255.255)
+% Bad IP address or host name
+% Unknown command or computer name, or unable to find computer address
+R1#
+
+Diagnosis from code: Restore-FailoverLink unconditionally sent end before
+configure terminal, including when the console was already at EXEC. That
+prevented no shutdown from being reached. Fix: send end only if the tracked
+prompt is in configuration mode, then require privileged EXEC. Tests now
+model IOS modes and reject end at EXEC, reproducing the original failure.

@@ -464,10 +464,10 @@ No `write memory` is issued. Restoration is attempted after failures,
 including a lost shutdown acknowledgement, with a reconnect retry. Forced
 cancellation, process termination or a disconnected console can prevent
 restoration. If the result reports restoration failure, or the runner stops
-during the experiment, restore R1 manually:
+during the experiment, restore R1 manually. Start at `R1#`; if the prompt
+contains `(config...)`, run `end` first. Do not run `end` at `R1#`.
 
 ```text
-end
 configure terminal
 interface FastEthernet0/0
 no shutdown
@@ -483,3 +483,9 @@ R1-R4 tertiary backup and traceroute are outside this experiment.
 Local verification: `./tests/Test-CoreFailover.ps1`. These mock tests cover
 preflight refusal, primary/backup/recovery paths, ping failure, lost shutdown
 acknowledgements and restoration failure. A live failover run is still needed.
+
+The first reported live failover run passed baseline and backup path checks,
+then failed restoration because `end` was sent at EXEC. Restoration now sends
+`end` only from configuration mode, including on reconnect. The mode-aware
+tests reproduce the original failure and pass with the fix. Full live recovery
+verification remains pending.

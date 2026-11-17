@@ -8,12 +8,34 @@ function Invoke-CoreInterfaceConfiguration { }
 function Invoke-RestMethod { return @([pscustomobject]@{ name='R1'; console_host='127.0.0.1'; console=5001 }, [pscustomobject]@{ name='R4'; console_host='127.0.0.1'; console=5004 }) }
 function Open-IosConsole($Address, $Port) {
     $global:FailoverMock.opens++
-    return [pscustomobject]@{ name = $(if ($Port -eq 5001) { 'R1' } else { 'R4' }); Prompt='R1#' }
+    $name = if ($Port -eq 5001) { 'R1' } else { 'R4' }
+    return [pscustomobject]@{ name = $name; Prompt="$name#" }
 }
 function Close-IosConsole($Session) { $global:FailoverMock.closes++ }
 function Send-IosCommand($Session, $Command) {
     $state = $global:FailoverMock
     $state.commands.Add("$($Session.name):$Command")
+    # Model IOS modes: accepting every command in every mode hid the live bug.
+    $inConfig = $Session.Prompt -match '\('
+    if ($Command -eq 'end') {
+        if (-not $inConfig) { $state.invalidEnds++; throw "IOS rejected 'end' at EXEC; Translating end; Unknown command or computer name" }
+        $Session.Prompt = "$($Session.name)#"
+        return 'OK'
+    }
+    if ($Command -eq 'configure terminal') {
+        if ($inConfig) { throw 'configure terminal requires EXEC mode' }
+        $Session.Prompt = "$($Session.name)(config)#"
+        return 'OK'
+    }
+    if ($Command -eq 'interface FastEthernet0/0') {
+        if (-not $inConfig) { throw 'interface requires configuration mode' }
+        $Session.Prompt = "$($Session.name)(config-if)#"
+        return 'OK'
+    }
+    if ($Command -in @('shutdown','no shutdown')) {
+        if ($Session.Prompt -notmatch '\(config-if\)#$') { throw 'shutdown requires interface configuration mode' }
+    }
+    elseif ($Command -match '^(show|ping) ' -and $inConfig) { throw 'show/ping requires EXEC mode in this workflow' }
     switch -Regex ($Command) {
         '^shutdown$' {
             $state.down = $true; $state.cuts++
@@ -45,13 +67,12 @@ function Send-IosCommand($Session, $Command) {
             if ($state.scenario -eq 'backup-ping-failure' -and $state.down) { return 'Success rate is 0 percent (0/3)' }
             return 'Success rate is 100 percent (3/3)'
         }
-        '^(end|configure terminal|interface FastEthernet0/0)$' { return 'OK' }
         default { throw "Unexpected command: $Command" }
     }
 }
 try {
     foreach ($scenario in @('plan','success','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure')) {
-        $global:FailoverMock = @{ scenario=$scenario; down=$false; cuts=0; restores=0; opens=0; closes=0; backupReads=0; restoreFailed=$false; commands=[Collections.Generic.List[string]]::new() }
+        $global:FailoverMock = @{ scenario=$scenario; down=$false; cuts=0; restores=0; opens=0; closes=0; invalidEnds=0; backupReads=0; restoreFailed=$false; commands=[Collections.Generic.List[string]]::new() }
         $directory = Join-Path $testDirectory $scenario
         $mode = if ($scenario -eq 'plan') { 'plan' } else { 'apply' }
         $failed = $false
@@ -60,6 +81,7 @@ try {
         $state = $global:FailoverMock
         Assert-Failover ($failed -eq ($scenario -notin @('plan','success','delayed-backup','retry-restore'))) "$scenario status"
         Assert-Failover ($state.closes -eq $state.opens) "$scenario closes all sessions"
+        Assert-Failover ($state.invalidEnds -eq 0) "$scenario never sends end at EXEC"
         Assert-Failover (-not ($state.commands | Where-Object { $_ -match 'write memory|copy .*startup' })) "$scenario never saves"
         if ($scenario -in @('plan','initially-down','baseline-failure')) { Assert-Failover ($state.cuts -eq 0) "$scenario cannot cut link" }
         elseif ($scenario -ne 'restore-failure') { Assert-Failover (-not $state.down -and $state.restores -eq 1) "$scenario restores link even after failure" }
