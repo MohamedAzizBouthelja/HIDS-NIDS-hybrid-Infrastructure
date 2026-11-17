@@ -1,0 +1,42 @@
+﻿{
+    "started_utc":  "2026-11-17T20:01:21.1008748Z",
+    "plan":  "Verify R1-R2-R4; shut R1 FastEthernet0/0 and verify R1-R3-R4; shut R1 FastEthernet1/0 and verify direct R1-R4; restore FastEthernet1/0 and verify R1-R3-R4; restore FastEthernet0/0 and verify R1-R2-R4. No startup save.",
+    "shutdown_attempted":  true,
+    "restored":  true,
+    "passed":  true,
+    "error":  "",
+    "restoration_error":  "",
+    "commit_sha":  "8cc204cc5db03967676822b1c82a328343f68e71",
+    "run_id":  "44163708409",
+    "run_attempt":  "1",
+    "capture_traceroute":  true,
+    "measure_loss":  false,
+    "test_direct_backup":  true,
+    "links":  {
+                  "primary":  {
+                                  "interface":  "FastEthernet0/0",
+                                  "address":  "10.0.12.1",
+                                  "shutdown_attempted":  true,
+                                  "restored":  true,
+                                  "restore_command_utc":  [
+                                                              "2026-11-17T20:02:14.7037097Z"
+                                                          ],
+                                  "shutdown_utc":  "2026-11-17T20:01:30.2588595Z"
+                              },
+                  "secondary":  {
+                                    "interface":  "FastEthernet1/0",
+                                    "address":  "10.0.13.1",
+                                    "shutdown_attempted":  true,
+                                    "restored":  true,
+                                    "restore_command_utc":  [
+                                                                "2026-11-17T20:01:50.8948104Z"
+                                                            ],
+                                    "shutdown_utc":  "2026-11-17T20:01:40.1847002Z"
+                                }
+              },
+    "shutdown_utc":  "2026-11-17T20:01:30.2588595Z",
+    "restore_command_utc":  [
+                                "2026-11-17T20:02:14.7037097Z"
+                            ],
+    "finished_utc":  "2026-11-17T20:02:27.2862148Z"
+}

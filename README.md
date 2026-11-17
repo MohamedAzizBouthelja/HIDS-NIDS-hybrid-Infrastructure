@@ -426,8 +426,8 @@ For the dependency-free OSPF tests on Windows PowerShell:
 ## Next milestones
 
 1. Preserve successful repeat-apply evidence for configuration idempotence.
-2. Test the tertiary direct backup separately.
-3. Obtain a suitable managed switch image and implement the VLAN/access network.
+2. Retain the verified direct backup run and its recovery evidence.
+3. Run **GNS3 switch readiness**, then boot and test the isolated [managed switching pilot](docs/switching-pilot.md).
 4. Compare OSPF and EIGRP in separate routing campaigns.
 5. Add routing experiments, QoS measurements, Suricata, Wazuh and Zabbix.
 6. Add AWS and end-to-end VPN validation.
@@ -589,3 +589,7 @@ even if restoring the other one fails. If the runner is stopped or cleanup
 fails, check `show ip interface brief` on R1. Use the manual restore procedure
 above for each affected interface, substituting `FastEthernet1/0` where needed.
 The workflow makes no startup configuration save.
+
+The live run verified one-hop traceroutes through FastEthernet2/0 in both
+directions, 3/3 pings at every checkpoint and both transit restorations.
+[Direct backup evidence](docs/evidence/2026-11-17/failover-direct-success/README.md).

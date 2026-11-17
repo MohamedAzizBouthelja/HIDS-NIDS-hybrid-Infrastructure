@@ -46,7 +46,11 @@ These timers measure sequential route polling, not exact convergence or
 packet loss. Optional traceroute capture is now verified from run 44156385861: six
 traces confirm both directions through R2, then R3, then R2 again. The
 [original artifact and inspection](docs/evidence/2026-11-17/failover-traceroute-success/README.md)
-are archived with source commit 3c9e910742530e61f6c23b386ce1ce69095ad53d. The tertiary backup, VLANs,
+are archived with source commit 3c9e910742530e61f6c23b386ce1ce69095ad53d.
+Run 44163708409 subsequently verified the direct tertiary backup in both
+directions and restored both transit interfaces.
+[Direct backup evidence](docs/evidence/2026-11-17/failover-direct-success/README.md).
+VLANs,
 firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
 
 | Work item | Status | Evidence |
@@ -69,6 +73,7 @@ firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
 | Controlled OSPF failover and primary recovery | Verified from live artifact | Run 44153014000: restored=true, passed=true; raw routes, up/up and six 3/3 ping results |
 | Traceroute during baseline, backup and recovery | Verified from live artifact | Six two-hop traces show R2, R3, R2 in both directions; run 44156385861 |
 | Sampled packet loss across failover and restoration | Verified from live artifact | Run 44160336159 recorded 5 consecutive timeouts in 24 post-shutdown probes and 0 in 25 post-restoration probes. See [the loss measurement archive](docs/evidence/2026-11-17/failover-loss-success/README.md). |
+| Direct R1–R4 backup | Verified from live artifact | Run 44163708409 confirms the one-hop path in both directions with both transit interfaces shut, and verifies recovery through R3 and R2. |
 | Live repeat-deployment verification | Pending final evidence | Existing objects were reused during troubleshooting; a complete successful repeat run remains to be recorded |
 | VLANs, managed switching, firewall, QoS, HIDS/NIDS and AWS/VPN | Not demonstrated | Architecture scope only at this checkpoint |
 
@@ -622,10 +627,10 @@ Relevant commits present in the local repository:
 
 ## 8 Next actions
 
-1. Commit and push the live loss measurement archive and updated documentation.
-2. Run **GNS3 core failover** in `apply` mode with `test_direct_backup` enabled. The direct path and both restoration steps have local test coverage and await live verification.
-3. Archive original interface job and repeat-deployment evidence if available.
-4. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.
+1. Commit and push the direct backup evidence and updated documentation.
+2. Archive original interface job and repeat-deployment evidence if available.
+3. Run **GNS3 switch readiness** on the runner. If the template passes inventory, boot and verify the isolated [managed switching pilot](docs/switching-pilot.md).
+4. Integrate client and server VLANs with the routed core after the pilot passes. EIGRP, QoS, security monitoring and AWS/VPN remain later checkpoints.
 
 The default failover workflow temporarily shuts R1 FastEthernet0/0. The
 direct-backup option also shuts R1 FastEthernet1/0. Cleanup attempts

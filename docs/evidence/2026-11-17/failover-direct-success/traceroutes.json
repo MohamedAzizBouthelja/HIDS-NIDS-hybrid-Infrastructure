@@ -1,0 +1,72 @@
+﻿[
+    {
+        "phase":  "baseline",
+        "router":  "R1",
+        "utc":  "2026-11-17T20:01:28.1173839Z",
+        "command":  "traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4",
+        "output":  "traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4\r\nType escape sequence to abort.\r\nTracing the route to 10.255.0.4\r\nVRF info: (vrf in name/id, vrf out name/id)\r\n  1 10.0.12.2 8 msec\r\n  2 10.0.24.2 104 msec\r\nR1#"
+    },
+    {
+        "phase":  "baseline",
+        "router":  "R4",
+        "utc":  "2026-11-17T20:01:29.7238393Z",
+        "command":  "traceroute 10.255.0.1 numeric probe 1 source 10.255.0.4 timeout 1 ttl 1 4",
+        "output":  "traceroute 10.255.0.1 numeric probe 1 source 10.255.0.4 timeout 1 ttl 1 4\r\nType escape sequence to abort.\r\nTracing the route to 10.255.0.1\r\nVRF info: (vrf in name/id, vrf out name/id)\r\n  1 10.0.24.1 20 msec\r\n  2 10.0.12.1 112 msec\r\nR4#"
+    },
+    {
+        "phase":  "backup",
+        "router":  "R1",
+        "utc":  "2026-11-17T20:01:38.4478214Z",
+        "command":  "traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4",
+        "output":  "traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4\r\nType escape sequence to abort.\r\nTracing the route to 10.255.0.4\r\nVRF info: (vrf in name/id, vrf out name/id)\r\n  1 10.0.13.2 4 msec\r\n  2 10.0.34.2 92 msec\r\nR1#"
+    },
+    {
+        "phase":  "backup",
+        "router":  "R4",
+        "utc":  "2026-11-17T20:01:39.6187810Z",
+        "command":  "traceroute 10.255.0.1 numeric probe 1 source 10.255.0.4 timeout 1 ttl 1 4",
+        "output":  "traceroute 10.255.0.1 numeric probe 1 source 10.255.0.4 timeout 1 ttl 1 4\r\nType escape sequence to abort.\r\nTracing the route to 10.255.0.1\r\nVRF info: (vrf in name/id, vrf out name/id)\r\n  1 10.0.34.1 8 msec\r\n  2 10.0.13.1 104 msec\r\nR4#"
+    },
+    {
+        "phase":  "direct",
+        "router":  "R1",
+        "utc":  "2026-11-17T20:01:49.0385868Z",
+        "command":  "traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4",
+        "output":  "traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4\r\nType escape sequence to abort.\r\nTracing the route to 10.255.0.4\r\nVRF info: (vrf in name/id, vrf out name/id)\r\n  1 10.0.14.2 12 msec\r\nR1#"
+    },
+    {
+        "phase":  "direct",
+        "router":  "R4",
+        "utc":  "2026-11-17T20:01:50.4248160Z",
+        "command":  "traceroute 10.255.0.1 numeric probe 1 source 10.255.0.4 timeout 1 ttl 1 4",
+        "output":  "traceroute 10.255.0.1 numeric probe 1 source 10.255.0.4 timeout 1 ttl 1 4\r\nType escape sequence to abort.\r\nTracing the route to 10.255.0.1\r\nVRF info: (vrf in name/id, vrf out name/id)\r\n  1 10.0.14.1 4 msec\r\nR4#"
+    },
+    {
+        "phase":  "secondary_recovery",
+        "router":  "R1",
+        "utc":  "2026-11-17T20:02:13.0070136Z",
+        "command":  "traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4",
+        "output":  "traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4\r\nType escape sequence to abort.\r\nTracing the route to 10.255.0.4\r\nVRF info: (vrf in name/id, vrf out name/id)\r\n  1 10.0.13.2 64 msec\r\n  2 10.0.34.2 92 msec\r\nR1#"
+    },
+    {
+        "phase":  "secondary_recovery",
+        "router":  "R4",
+        "utc":  "2026-11-17T20:02:14.1801429Z",
+        "command":  "traceroute 10.255.0.1 numeric probe 1 source 10.255.0.4 timeout 1 ttl 1 4",
+        "output":  "traceroute 10.255.0.1 numeric probe 1 source 10.255.0.4 timeout 1 ttl 1 4\r\nType escape sequence to abort.\r\nTracing the route to 10.255.0.1\r\nVRF info: (vrf in name/id, vrf out name/id)\r\n  1 10.0.34.1 8 msec\r\n  2 10.0.13.1 96 msec\r\nR4#"
+    },
+    {
+        "phase":  "recovery",
+        "router":  "R1",
+        "utc":  "2026-11-17T20:02:25.9246796Z",
+        "command":  "traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4",
+        "output":  "traceroute 10.255.0.4 numeric probe 1 source 10.255.0.1 timeout 1 ttl 1 4\r\nType escape sequence to abort.\r\nTracing the route to 10.255.0.4\r\nVRF info: (vrf in name/id, vrf out name/id)\r\n  1 10.0.12.2 40 msec\r\n  2 10.0.24.2 72 msec\r\nR1#"
+    },
+    {
+        "phase":  "recovery",
+        "router":  "R4",
+        "utc":  "2026-11-17T20:02:27.2331942Z",
+        "command":  "traceroute 10.255.0.1 numeric probe 1 source 10.255.0.4 timeout 1 ttl 1 4",
+        "output":  "traceroute 10.255.0.1 numeric probe 1 source 10.255.0.4 timeout 1 ttl 1 4\r\nType escape sequence to abort.\r\nTracing the route to 10.255.0.1\r\nVRF info: (vrf in name/id, vrf out name/id)\r\n  1 10.0.24.1 8 msec\r\n  2 10.0.12.1 92 msec\r\nR4#"
+    }
+]

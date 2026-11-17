@@ -1,0 +1,122 @@
+{
+  "run_id": "44163708409",
+  "run_attempt": "1",
+  "commit_sha": "8cc204cc5db03967676822b1c82a328343f68e71",
+  "started_utc": "2026-11-17T20:01:21.1008748Z",
+  "finished_utc": "2026-11-17T20:02:27.2862148Z",
+  "sha256": "a264141a1da0d62a71a13b367a099051735b12290aedb6f633284a200cc4032d",
+  "restored_interfaces": [
+    "FastEthernet1/0",
+    "FastEthernet0/0"
+  ],
+  "checks": [
+    {
+      "phase": "baseline",
+      "router": "R1",
+      "traceroute_hops": [
+        "10.0.12.2",
+        "10.0.24.2"
+      ],
+      "next_hop": "10.0.12.2",
+      "egress_interface": "FastEthernet0/0",
+      "ping_replies": 3
+    },
+    {
+      "phase": "baseline",
+      "router": "R4",
+      "traceroute_hops": [
+        "10.0.24.1",
+        "10.0.12.1"
+      ],
+      "next_hop": "10.0.24.1",
+      "egress_interface": "FastEthernet0/0",
+      "ping_replies": 3
+    },
+    {
+      "phase": "backup",
+      "router": "R1",
+      "traceroute_hops": [
+        "10.0.13.2",
+        "10.0.34.2"
+      ],
+      "next_hop": "10.0.13.2",
+      "egress_interface": "FastEthernet1/0",
+      "ping_replies": 3
+    },
+    {
+      "phase": "backup",
+      "router": "R4",
+      "traceroute_hops": [
+        "10.0.34.1",
+        "10.0.13.1"
+      ],
+      "next_hop": "10.0.34.1",
+      "egress_interface": "FastEthernet1/0",
+      "ping_replies": 3
+    },
+    {
+      "phase": "direct",
+      "router": "R1",
+      "traceroute_hops": [
+        "10.0.14.2"
+      ],
+      "next_hop": "10.0.14.2",
+      "egress_interface": "FastEthernet2/0",
+      "ping_replies": 3
+    },
+    {
+      "phase": "direct",
+      "router": "R4",
+      "traceroute_hops": [
+        "10.0.14.1"
+      ],
+      "next_hop": "10.0.14.1",
+      "egress_interface": "FastEthernet2/0",
+      "ping_replies": 3
+    },
+    {
+      "phase": "secondary_recovery",
+      "router": "R1",
+      "traceroute_hops": [
+        "10.0.13.2",
+        "10.0.34.2"
+      ],
+      "next_hop": "10.0.13.2",
+      "egress_interface": "FastEthernet1/0",
+      "ping_replies": 3
+    },
+    {
+      "phase": "secondary_recovery",
+      "router": "R4",
+      "traceroute_hops": [
+        "10.0.34.1",
+        "10.0.13.1"
+      ],
+      "next_hop": "10.0.34.1",
+      "egress_interface": "FastEthernet1/0",
+      "ping_replies": 3
+    },
+    {
+      "phase": "recovery",
+      "router": "R1",
+      "traceroute_hops": [
+        "10.0.12.2",
+        "10.0.24.2"
+      ],
+      "next_hop": "10.0.12.2",
+      "egress_interface": "FastEthernet0/0",
+      "ping_replies": 3
+    },
+    {
+      "phase": "recovery",
+      "router": "R4",
+      "traceroute_hops": [
+        "10.0.24.1",
+        "10.0.12.1"
+      ],
+      "next_hop": "10.0.24.1",
+      "egress_interface": "FastEthernet0/0",
+      "ping_replies": 3
+    }
+  ]
+}
