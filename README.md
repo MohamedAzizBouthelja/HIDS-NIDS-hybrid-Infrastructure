@@ -520,3 +520,28 @@ is now verified from run 44156385861: six two-hop traces show primary, backup
 and recovered paths in both directions. See the
 [successful traceroute archive](docs/evidence/2026-11-17/failover-traceroute-success/README.md).
 It does not measure transition loss.
+
+### Measure packet loss during failover
+
+Run **GNS3 core failover** in `apply` mode with **measure_loss** checked.
+The sampler sends single loopback-sourced pings from R4 to R1 at roughly
+one-second intervals. Each window starts with three consecutive replies,
+continues across the R1 link command, and runs for at least another 25 seconds
+after the command sequence completes. The workflow then checks routes and
+bidirectional connectivity as usual.
+
+The artifact contains `probes-backup.jsonl` and `probes-recovery.jsonl` with
+each sample's command start, response read time, reply status and raw IOS
+output. In `result.json`, `backup_probes` and `recovery_probes` count
+replies and timeouts for probes whose commands started at or after the
+transition command. Probes in flight at command start are counted separately
+and retained in the raw log. Recovery uses the first `no shutdown` command
+timestamp and retains any retry timestamps.
+
+`first_reply_in_final_streak_seconds` estimates when sustained reachability
+returned, using the first response in a final streak of at least three
+replies. A null value means the sample never established that streak.
+If there were no sampled timeouts, report zero observed timeouts for the
+sampled direction. An interruption between probes can escape detection.
+The interval includes IOS command and console delays, and subsequent route
+polls verify the selected path after the measurement window.

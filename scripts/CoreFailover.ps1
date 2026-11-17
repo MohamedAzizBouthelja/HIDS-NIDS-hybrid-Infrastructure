@@ -6,6 +6,7 @@ function Invoke-CoreFailover {
         [string] $ManifestPath,
         [string] $EvidenceDirectory,
         [switch] $CaptureTraceroute,
+        [switch] $MeasureLoss,
         [ValidateRange(1,120)][int] $Attempts = 40,
         [ValidateRange(0,10)][int] $PollSeconds = 2
     )
@@ -18,6 +19,7 @@ function Invoke-CoreFailover {
     $plan = 'Temporarily shutdown R1 FastEthernet0/0; verify R1-R3-R4 in both directions; no shutdown; verify R1-R2-R4. No startup save.'
     Write-Output $plan
     if ($CaptureTraceroute) { Write-Output 'Traceroute capture enabled: both directions during baseline, backup and recovery; maximum TTL 4.' }
+    if ($MeasureLoss) { Write-Output 'R4 will probe the R1 loopback before and for 25 seconds after each transition, then path checks will run.' }
     if ($Mode -eq 'plan') { return }
     if (-not $EvidenceDirectory) { throw 'Apply requires an evidence directory.' }
     [void](New-Item -ItemType Directory -Path $EvidenceDirectory -Force)
@@ -30,6 +32,8 @@ function Invoke-CoreFailover {
     $result.run_id = $env:GITHUB_RUN_ID
     $result.run_attempt = $env:GITHUB_RUN_ATTEMPT
     $result.capture_traceroute = [bool]$CaptureTraceroute
+    $result.measure_loss = [bool]$MeasureLoss
+    $probe = $null
     function Save-FailoverEvidence {
         ConvertTo-Json -InputObject $transcript.ToArray() -Depth 12 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'console-transcript.json') -Encoding UTF8
         ConvertTo-Json -InputObject $observations.ToArray() -Depth 12 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'observations.json') -Encoding UTF8
@@ -98,6 +102,7 @@ function Invoke-CoreFailover {
                 }
                 $null = Invoke-FailoverCommand R1 'configure terminal'
                 $null = Invoke-FailoverCommand R1 'interface FastEthernet0/0'
+                $result.restore_command_utc = @($result.restore_command_utc | Where-Object { $_ }) + @([DateTime]::UtcNow.ToString('o'))
                 $null = Invoke-FailoverCommand R1 'no shutdown'
                 $null = Invoke-FailoverCommand R1 'end'
                 $linkUp = $false
@@ -126,18 +131,34 @@ function Invoke-CoreFailover {
             $config -match '(?m)^\s*shutdown\s*\r?$' -or
             $brief -notmatch '(?m)^FastEthernet0/0\s+10\.0\.12\.1\s+YES\s+\S+\s+up\s+up\s*\r?$') { throw 'R1 primary interface does not match the active baseline.' }
         Wait-FailoverPath baseline $false
+        if ($MeasureLoss) { $probe = Start-FailoverProbes $sessions.R4 $EvidenceDirectory 'backup' }
         $null = Invoke-FailoverCommand R1 'configure terminal'
         $null = Invoke-FailoverCommand R1 'interface FastEthernet0/0'
         # Arm cleanup BEFORE sending shutdown: a lost acknowledgement may hide a successful change.
         $result.shutdown_attempted = $true
-        $result.shutdown_utc = [DateTime]::UtcNow.ToString('o')
         Save-FailoverEvidence
         try {
+            $result.shutdown_utc = [DateTime]::UtcNow.ToString('o')
             $null = Invoke-FailoverCommand R1 'shutdown'
             $null = Invoke-FailoverCommand R1 'end'
+            if ($MeasureLoss) {
+                Start-Sleep -Seconds 25
+                $completedProbe = $probe
+                $probe = $null
+                Stop-FailoverProbes $completedProbe
+                $result.backup_probes = Get-FailoverProbeSummary $completedProbe.output_path $result.shutdown_utc
+            }
             Wait-FailoverPath backup $true
+            if ($MeasureLoss) { $probe = Start-FailoverProbes $sessions.R4 $EvidenceDirectory 'recovery' }
         }
         finally { Restore-FailoverLink }
+        if ($MeasureLoss) {
+            Start-Sleep -Seconds 25
+            $completedProbe = $probe
+            $probe = $null
+            Stop-FailoverProbes $completedProbe
+            $result.recovery_probes = Get-FailoverProbeSummary $completedProbe.output_path $result.restore_command_utc[0]
+        }
         Wait-FailoverPath recovery $false
         $result.passed = $true
     }
@@ -153,6 +174,9 @@ function Invoke-CoreFailover {
                     $result.restoration_error = $_.Exception.Message
                     Write-Warning 'RESTORATION FAILED: at R1# run configure terminal, interface FastEthernet0/0, no shutdown, end. If already in configuration mode, use end first.'
                 }
+            }
+            if ($null -ne $probe) {
+                try { Stop-FailoverProbes $probe } catch { Write-Warning "R4 probe cleanup reported: $($_.Exception.Message)" }
             }
             foreach ($session in @($sessions.Values)) {
                 try { if ($session.Prompt -match '\(') { $null = Send-IosCommand $session 'end' } } catch { Write-Warning 'Could not exit configuration mode.' }

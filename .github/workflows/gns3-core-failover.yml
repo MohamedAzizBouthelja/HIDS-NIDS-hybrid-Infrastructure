@@ -12,6 +12,10 @@ on:
         description: Capture bounded traceroutes during baseline, backup and recovery
         type: boolean
         default: false
+      measure_loss:
+        description: Sample ICMP throughout both link transitions
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,7 +42,8 @@ jobs:
         env:
           FAILOVER_MODE: ${{ inputs.mode }}
           CAPTURE_TRACEROUTE: ${{ inputs.capture_traceroute }}
-        run: ./scripts/Test-CoreFailover.ps1 -Mode $env:FAILOVER_MODE -CaptureTraceroute:($env:CAPTURE_TRACEROUTE -eq 'true')
+          MEASURE_LOSS: ${{ inputs.measure_loss }}
+        run: ./scripts/Test-CoreFailover.ps1 -Mode $env:FAILOVER_MODE -CaptureTraceroute:($env:CAPTURE_TRACEROUTE -eq 'true') -MeasureLoss:($env:MEASURE_LOSS -eq 'true')
       - name: Save failover evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

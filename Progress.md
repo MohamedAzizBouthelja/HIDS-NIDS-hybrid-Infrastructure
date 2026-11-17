@@ -621,9 +621,9 @@ Relevant commits present in the local repository:
 
 ## 8 Next actions
 
-1. Commit and push the successful traceroute archive and updated documentation.
-2. Design a separate packet-loss/convergence experiment with continuous probes across transitions.
-3. Treat existing route-poll timers as observation latency, not exact convergence time.
+1. Commit and push the workflow changes for measuring packet loss.
+2. Run **GNS3 core failover** in `apply` mode with `measure_loss` enabled.
+3. Archive the live probe logs and compare backup and recovery timeout counts and time to sustained replies. The measurement mode has passed local testing.
 4. Verify the direct R1-R4 tertiary backup in a separate controlled experiment.
 5. Archive original interface job and repeat-deployment evidence if available.
 6. Continue with managed switching, EIGRP comparison, QoS, security monitoring and AWS/VPN.

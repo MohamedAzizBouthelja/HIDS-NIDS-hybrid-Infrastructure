@@ -12,8 +12,30 @@ function Open-IosConsole($Address, $Port) {
     return [pscustomobject]@{ name = $name; Prompt="$name#" }
 }
 function Close-IosConsole($Session) { $global:FailoverMock.closes++ }
+function Start-FailoverProbes($Session, $EvidenceDirectory, $Phase) {
+    $state = $global:FailoverMock
+    Assert-Failover ($Session.name -eq 'R4' -and -not $state.probePhase) 'R4 exclusively owns the probe window'
+    Assert-Failover ($state.down -eq ($Phase -eq 'recovery')) 'Probes begin before the link transition'
+    $state.probePhase = $Phase
+    return @{ output_path = $Phase }
+}
+function Stop-FailoverProbes($Probe) {
+    $state = $global:FailoverMock
+    Assert-Failover ($state.probePhase -eq $Probe.output_path) 'The active probe window is stopped'
+    $state.probePhase = ''
+}
+function Get-FailoverProbeSummary($Path, $EventUtc) {
+    Assert-Failover (-not $global:FailoverMock.probePhase -and $EventUtc) 'Summary follows sampler completion and has a command timestamp'
+    return @{ phase = $Path }
+}
+function Start-Sleep { param([int] $Seconds) }
 function Send-IosCommand($Session, $Command) {
     $state = $global:FailoverMock
+    Assert-Failover (-not ($state.probePhase -and $Session.name -eq 'R4')) 'Foreground commands must wait for the R4 probe worker'
+    if ($state.scenario -eq 'measure' -and $Command -in @('shutdown','no shutdown')) {
+        $expectedPhase = if ($Command -eq 'shutdown') { 'backup' } else { 'recovery' }
+        Assert-Failover ($state.probePhase -eq $expectedPhase) 'Probe worker is active during the transition'
+    }
     $state.commands.Add("$($Session.name):$Command")
     # Model IOS modes: accepting every command in every mode hid the live bug.
     $inConfig = $Session.Prompt -match '\('
@@ -77,16 +99,19 @@ function Send-IosCommand($Session, $Command) {
     }
 }
 try {
-    foreach ($scenario in @('plan','success','trace-success','trace-error','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure')) {
+    foreach ($scenario in @('plan','success','measure','trace-success','trace-error','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure')) {
         $global:FailoverMock = @{ scenario=$scenario; down=$false; cuts=0; restores=0; opens=0; closes=0; invalidEnds=0; backupReads=0; restoreFailed=$false; commands=[Collections.Generic.List[string]]::new() }
         $directory = Join-Path $testDirectory $scenario
         $mode = if ($scenario -eq 'plan') { 'plan' } else { 'apply' }
         $failed = $false
         $capture = $scenario -in @('plan','trace-success','trace-error')
-        try { Invoke-CoreFailover -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 -CaptureTraceroute:$capture | Out-Null }
+        $measure = $scenario -in @('measure','lost-shutdown-ack')
+        try { Invoke-CoreFailover -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 -CaptureTraceroute:$capture -MeasureLoss:$measure | Out-Null }
         catch { $failed = $true }
         $state = $global:FailoverMock
-        Assert-Failover ($failed -eq ($scenario -notin @('plan','success','trace-success','delayed-backup','retry-restore'))) "$scenario status"
+        $expectedSuccess = $scenario -in @('success','measure','trace-success','delayed-backup','retry-restore')
+        Assert-Failover ($failed -eq (-not ($expectedSuccess -or $scenario -eq 'plan'))) "$scenario status"
+        Assert-Failover (-not $state.probePhase) "$scenario releases the probe console"
         Assert-Failover ($state.closes -eq $state.opens) "$scenario closes all sessions"
         Assert-Failover ($state.invalidEnds -eq 0) "$scenario never sends end at EXEC"
         Assert-Failover (-not ($state.commands | Where-Object { $_ -match 'write memory|copy .*startup' })) "$scenario never saves"
@@ -95,7 +120,10 @@ try {
         if ($scenario -eq 'plan') { Assert-Failover ($state.opens -eq 0) 'Plan opens no consoles' }
         else {
             $evidence = Get-Content (Join-Path $directory 'result.json') -Raw | ConvertFrom-Json
-            Assert-Failover ($evidence.passed -eq ($scenario -in @('success','trace-success','delayed-backup','retry-restore'))) "$scenario evidence accurately reports status"
+            Assert-Failover ($evidence.passed -eq $expectedSuccess) "$scenario evidence accurately reports status"
+            if ($scenario -eq 'measure') {
+                Assert-Failover ($evidence.backup_probes.phase -eq 'backup' -and $evidence.recovery_probes.phase -eq 'recovery') 'Both probe summaries are archived'
+            }
             if ($scenario -eq 'restore-failure') { Assert-Failover ($evidence.restoration_error -and -not $evidence.restored) 'Restoration failure recorded' }
             if ($scenario -eq 'trace-success') {
                 $traceData = Get-Content (Join-Path $directory 'traceroutes.json') -Raw | ConvertFrom-Json
