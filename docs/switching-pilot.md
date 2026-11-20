@@ -121,13 +121,25 @@ Client-A still reaches Client-B. Restore Test-C's planned
 
 ## Verify rapid spanning tree with two trunks
 
-Cable trunk B and bring Gi0/1 up on both ends. Use
-`show spanning-tree summary` and `show spanning-tree vlan 10`. On SW-A2,
-one uplink should be a forwarding root port and the other a blocked
-alternate. Verify the VLAN 10 ping, then shut the currently forwarding
-uplink on SW-A2. Confirm the alternate forwards and the ping works again.
-Restore the uplink and confirm the original redundant topology returns.
-Keep both spanning-tree outputs and the ping results.
+Cable SW-A1 Gi0/1 to SW-A2 Gi0/1 and bring Gi0/1 up on both ends. Keep
+both links as independent trunks for this test. Close the switch and
+client consoles so the runner can use them.
+
+Run **GNS3 switching RSTP** in **plan** mode to check the project and all
+five cables, then run **apply**. The workflow checks Rapid PVST and
+requires SW-A1 to be the VLAN 10 root. It identifies the forwarding and
+blocked uplinks on SW-A2, tests baseline pings, shuts the forwarding
+uplink, confirms the alternate forwards, and retests the pings. It restores
+the original uplink even if the test fails. To pass, both trunks must return
+to the redundant spanning-tree state and all three measured pings must
+succeed in both directions at each checkpoint.
+[Cisco spanning-tree output reference](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/lanswitch/configuration/xe-3s/asr903/lanswitch-xe-3s-asr903-book/lanswitch-xe-3s-asr903-book_chapter_0110.pdf).
+
+Download the `switching-rstp` artifact. It contains `result.json` and
+`console-transcript.json`. If the runner is stopped mid-test or
+`restoration_error` is present, inspect SW-A2 and use `no shutdown` on
+the port named in `interrupted_port` if administratively down. The test
+does not write the startup configuration. Begin LACP after the live RSTP run passes.
 
 ## Verify LACP and member recovery
 

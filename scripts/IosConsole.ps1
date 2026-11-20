@@ -152,7 +152,7 @@ function Send-IosCommand($Session, [string] $Command, [int] $TimeoutSeconds = 30
     return $output
 }
 
-function Open-IosConsole([string] $Address, [int] $Port) {
+function Open-IosConsole([string] $Address, [int] $Port, [switch] $Vpcs, [switch] $AllowConfigMode) {
     $client = [System.Net.Sockets.TcpClient]::new()
     try {
         $pending = $client.BeginConnect($Address, $Port, $null, $null)
@@ -171,7 +171,14 @@ function Open-IosConsole([string] $Address, [int] $Port) {
         }
         $stream.Write([byte[]]@(13), 0, 1)
         $null = Read-IosResponse $session -AllowInitialReturn
-        if ($session.Prompt -match '\(') { throw 'The console is already in configuration mode. Exit to an EXEC prompt first.' }
+        if ($Vpcs) {
+            if (-not $session.Prompt.EndsWith('>')) { throw 'Expected a VPCS console prompt.' }
+            return $session
+        }
+        if ($session.Prompt -match '\(') {
+            if ($AllowConfigMode) { return $session }
+            throw 'The console is already in configuration mode. Exit to an EXEC prompt first.'
+        }
         if ($session.Prompt.EndsWith('>')) { $null = Send-IosCommand $session 'enable' }
         if (-not $session.Prompt.EndsWith('#')) { throw 'The console is not in privileged EXEC mode.' }
         $null = Send-IosCommand $session 'terminal length 0'
