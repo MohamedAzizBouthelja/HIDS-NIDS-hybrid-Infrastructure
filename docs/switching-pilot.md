@@ -33,6 +33,17 @@ Review `plan.json` and `nodes.json`, then open `Switching-Pilot` in
 GNS3 and start the five devices. Check `show version` and
 `show interfaces status` on both switches before applying configuration.
 
+If either console reports Open vSwitch or presents a Linux shell, stop
+before configuring the trunks or running the Cisco RSTP test. In the
+`Switching-Pilot` project, open the consoles directly from **SW-A1** and
+**SW-A2** and check each guest separately. A Cisco guest should identify
+itself in the output of `show version`. On a Linux guest,
+`ovs-vsctl --version` identifies the installed Open vSwitch utility.
+If the Linux console belongs to a pilot switch, inspect that node's QEMU
+boot disk in GNS3. The template label and cabling evidence establish the
+controller configuration only. To use the two Open vSwitch appliances,
+follow the separate [Open vSwitch VLAN procedure](#open-vswitch-vlan-pilot).
+
 ### Resolve a failed readiness check
 
 From the failed job, download the **switch-readiness** artifact and open
@@ -176,3 +187,66 @@ Retain the switch versions, port map, VLAN and trunk states, spanning-tree
 roles, LACP state and ping outputs. These checks cover the isolated
 Layer 2 pilot. Router subinterfaces, cross-core VLAN traffic and
 management access policy follow in the integration phase.
+
+## Open vSwitch VLAN pilot
+
+The console outputs for `OpenvSwitch-1` and `OpenvSwitch-2` show Open
+vSwitch 2.17.12 with `eth0` through `eth15` on `br0`. Use the OVS nodes
+in a separate, isolated GNS3 project. The Cisco pilot and its workflows
+expect the QEMU IOSvL2 nodes and Cisco commands.
+[GNS3 Open vSwitch appliance](https://github.com/GNS3/gns3-registry/blob/master/appliances/openvswitch.gns3a).
+
+Before configuring anything, verify these four cables on the canvas.
+Keep all other switch ports uncabled, especially the second inter-switch
+link.
+
+| Port | Peer |
+| --- | --- |
+| OpenvSwitch-1 eth0 | OpenvSwitch-2 eth0 |
+| OpenvSwitch-1 eth2 | Client-A Ethernet0 |
+| OpenvSwitch-2 eth2 | Client-B Ethernet0 |
+| OpenvSwitch-2 eth3 | Test-C Ethernet0 |
+
+Run these commands on **both** OVS consoles. Port eth0 carries only tagged
+VLANs 10, 30 and 99. Port eth2 is an untagged access port in VLAN 10.
+
+```sh
+ovs-vsctl -- clear Port eth0 tag -- set Port eth0 vlan_mode=trunk trunks=10,30,99
+ovs-vsctl -- clear Port eth2 trunks -- set Port eth2 vlan_mode=access tag=10
+```
+
+On **OpenvSwitch-2 only**, initially put Test-C in VLAN 10 for a positive
+control.
+
+```sh
+ovs-vsctl -- clear Port eth3 trunks -- set Port eth3 vlan_mode=access tag=10
+```
+
+On the VPCS consoles, set Client-A to `ip 192.168.10.11/24`, Client-B
+to `ip 192.168.10.12/24`, and Test-C to `ip 192.168.10.13/24`.
+Leave all gateways blank. Ping between Client-A and Client-B in both
+directions. From Client-A, also ping Test-C. All should succeed before
+changing Test-C's VLAN.
+
+On **OpenvSwitch-2**, move the Test-C access port to VLAN 30.
+
+```sh
+ovs-vsctl set Port eth3 tag=30
+```
+
+Leave the VPCS IPs unchanged for the comparison. Run `clear arp` on
+Client-A and Test-C, then ping Test-C again from Client-A. It should fail.
+Client-A and Client-B should still reach each other. Then give Test-C its
+planned address with `ip 192.168.30.13/24`.
+
+Save the ping outputs and the output of the following command on each
+switch. This verifies the intended port settings alongside the packet
+tests. Test with a second uplink only after setting up and verifying OVS
+RSTP; parallel links before loop protection can create a Layer 2 loop.
+
+```sh
+ovs-vsctl --columns=name,vlan_mode,tag,trunks list Port
+```
+
+[Open vSwitch VLAN configuration](https://docs.openvswitch.org/en/stable/faq/configuration/) ·
+[OVS port VLAN fields](https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.conf.db.5.html).
