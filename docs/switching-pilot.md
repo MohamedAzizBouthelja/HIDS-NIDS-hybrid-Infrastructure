@@ -16,6 +16,43 @@ the GNS3 connectors to IOS interface names. The inventory does not check
 whether the disk boots or which commands the installed image accepts.
 [GNS3 appliance import](https://docs.gns3.com/docs/using-gns3/beginners/install-from-marketplace).
 
+### Provision the isolated topology
+
+If you have already created `Switching-Pilot` manually, keep that project
+and proceed to the boot checks below. Otherwise run **GNS3 switching pilot**
+in **plan** mode. It checks readiness again and previews five nodes and
+four links in the separate pilot project. When only one candidate passes,
+the workflow picks it. If several pass, enter the chosen eligible UUID
+from `readiness.json` in **switch_template_id**.
+
+Run **apply** to create the project, two switches and three VPCS, with
+trunk A and the three access links. Leave trunk B uncabled until the
+two-trunk RSTP test. The workflow validates existing pilot nodes and
+links before adding missing objects. It keeps the routed core separate.
+Review `plan.json` and `nodes.json`, then open `Switching-Pilot` in
+GNS3 and start the five devices. Check `show version` and
+`show interfaces status` on both switches before applying configuration.
+
+### Resolve a failed readiness check
+
+From the failed job, download the **switch-readiness** artifact and open
+`readiness.json`. If `iosvl2_candidates` is empty, check GNS3 on the
+runner PC. Use **File → Import appliance** to import the Cisco IOSvL2
+`.gns3a` descriptor. Select the GNS3 VM and supply the matching boot image
+that you are permitted to use in GNS3. Finish the import so the template
+appears in the device list. The appliance descriptor provides settings.
+The boot image is a separate file. [GNS3 import steps](https://docs.gns3.com/docs/using-gns3/beginners/import-gns3-appliance).
+
+If `iosvl2_candidates` lists a template, check its `issues` field or
+the job output for the settings to correct. The older readiness artifact
+lists the same settings separately under `compute_id`, `adapters`,
+`disk_referenced`, and `telnet_console`. Rerun readiness after making
+the change.
+
+Cisco's CML-supplied images require separate authorization for use outside
+CML. Confirm permission before using an image in GNS3.
+[Cisco image terms](https://developer.cisco.com/docs/modeling-labs/vm-images-for-cml-labs/).
+
 | Node and port | Peer | Assignment |
 | --- | --- | --- |
 | SW-A1 Gi0/0 | SW-A2 Gi0/0 | Trunk A |
