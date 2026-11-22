@@ -34,7 +34,19 @@ function Wait-PilotBond([string] $Phase, [string] $Down) {
             }
         }
         if ($ready) {
-            Assert-ClientPings $Phase
+            try { Assert-ClientPings $Phase }
+            catch {
+                $pingError = $_
+                foreach ($switch in $left,$right) {
+                    foreach ($command in 'ovs-vsctl --columns=name,vlan_mode,tag,trunks list Port',
+                            'ovs-vsctl --columns=name,ofport,admin_state,link_state,error list Interface',
+                            'ovs-appctl fdb/show br0', 'ovs-ofctl dump-ports br0') {
+                        try { $null = Invoke-Ovs $switch $command }
+                        catch { Write-Warning "Diagnostic failed on ${switch}: $command" }
+                    }
+                }
+                throw $pingError
+            }
             $result.checkpoints += $Phase
             Save-Result
             return
@@ -59,6 +71,14 @@ function Invoke-LacpPilot {
     }
     foreach ($name in $left,$right) {
         if (-not (Test-PilotBond $name)) { throw "$name bond0 is missing." }
+    }
+    # Both ends now have one verified logical uplink. OVS 2.17 does not
+    # support RSTP on bonded ports. Also normalize a previous partial run.
+    foreach ($name in $left,$right) {
+        $null = Invoke-Ovs $name 'ovs-vsctl set Bridge br0 stp_enable=false rstp_enable=false'
+        if ((Invoke-Ovs $name 'ovs-vsctl get Bridge br0 rstp_enable') -ne 'false') {
+            throw "$name still has RSTP enabled after bond conversion."
+        }
     }
     foreach ($name in $left,$right) {
         foreach ($port in 'eth0','eth1') { $null = Invoke-Ovs $name "ip link set $port up" }
