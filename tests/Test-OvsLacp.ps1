@@ -20,6 +20,7 @@ function Invoke-VpcsPing($Node,$Destination,$Count) {
     if ($Node -ne 'Client-B' -or $Destination -ne '192.168.10.11') { throw 'Unexpected probe' }
     return @{ replies = 1 }
 }
+function Write-PilotWireEvidence { $script:sampled = $true }
 function Assert-OvsPort {}
 function Save-Result {}
 function Test-AdminUp { return $false }
@@ -43,6 +44,7 @@ function Invoke-Ovs($Node, $Command) {
         'ovs-appctl fdb/show br0' { $script:diagnostics++; return '' }
         'ovs-ofctl *' { return '' }
         '*get Interface * ofport' { return '3' }
+        'ovs-appctl dpif/show' { return 'eth2 3/15' }
         '*ofproto/trace*' { $script:traces += $Command; return 'Datapath actions: drop' }
         '*get Interface * _uuid' { return ($Command -split ' ')[3] }
         '*get Port bond0 interfaces' { return '[eth0, eth1]' }
@@ -83,5 +85,5 @@ if (($script:cleared -join ',') -ne 'Client-A,Client-B') { throw 'Expected both 
 $script:baselineFailures = 2
 $script:traces = @()
 try { Invoke-LacpPilot; throw 'Persistent failure passed' } catch { if ($_.Exception.Message -ne 'injected baseline failure') { throw } }
-if ($result.checkpoints.Count -or $script:traces.Count -ne 2 -or $script:traces[1] -notmatch 'dl_vlan=10') { throw 'Missing failed-baseline evidence' }
+if (-not $script:sampled -or $result.checkpoints.Count -or $script:traces.Count -ne 2 -or $script:traces[1] -notmatch 'dl_vlan=10') { throw 'Missing failed-baseline evidence' }
 Write-Output 'Passed LACP conversion, both member tests, rerun and failure cleanup.'

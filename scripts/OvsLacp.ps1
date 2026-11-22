@@ -38,6 +38,8 @@ function Write-PilotArpTrace([string] $ActivePort) {
         if ($number -notmatch '^[1-9][0-9]*$') { throw "Invalid OpenFlow port for $node $ingress." }
         $flow = "in_port=$number,$arp"
         if ($node -eq $right) { $flow += ',dl_vlan=10' }
+        $portMap = Invoke-Ovs $node 'ovs-appctl dpif/show'
+        Write-Host "$node OpenFlow/datapath port map:`n$portMap"
         $trace = Invoke-Ovs $node "ovs-appctl ofproto/trace br0 '$flow'"
         Write-Host "$node simulated ARP ingress on ${ingress}:`n$trace"
     }
@@ -84,6 +86,10 @@ function Wait-PilotBond([string] $Phase, [string] $Down) {
                 }
                 try { Write-PilotArpTrace $activePort }
                 catch { Write-Warning "ARP forwarding trace failed: $($_.Exception.Message)" }
+                if ($Phase -eq 'baseline') {
+                    try { Write-PilotWireEvidence }
+                    catch { Write-Warning "Wire diagnostics failed: $($_.Exception.Message)" }
+                }
                 throw $pingError
             }
             $result.checkpoints += $Phase

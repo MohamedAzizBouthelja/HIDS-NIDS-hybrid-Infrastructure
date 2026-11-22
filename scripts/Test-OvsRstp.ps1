@@ -192,7 +192,7 @@ try {
         }
         $key = ($parts | Sort-Object) -join '|'
         if ($key -notin ($requiredLinks + $secondTrunk) -or $seen.ContainsKey($key)) { throw "Unexpected pilot cable $key." }
-        $seen[$key] = $true
+        $seen[$key] = $link
     }
     $missing = @($requiredLinks | Where-Object { -not $seen.ContainsKey($_) })
     if ($missing.Count) { throw "Missing pilot cables: $($missing -join ', ')." }
@@ -233,6 +233,7 @@ try {
     Assert-ClientAddress 'Client-B' '192.168.10.12'
 
     if ($Mode -eq 'lacp-apply') {
+        . (Join-Path $PSScriptRoot 'OvsWireEvidence.ps1')
         . (Join-Path $PSScriptRoot 'OvsLacp.ps1')
         Invoke-LacpPilot
         $result.passed = $true
