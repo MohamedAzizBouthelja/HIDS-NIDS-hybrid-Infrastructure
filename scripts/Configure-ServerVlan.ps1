@@ -30,7 +30,7 @@ function Test-RoutedPing([string] $Name, [string] $Address) {
     Write-Host "PASS $Name to $Address (3/3)"
 }
 
-function Get-CableKey($a,$b) { return (@($a,$b) | Sort-Object) -join '|' }
+. (Join-Path $PSScriptRoot 'IntegrationTopology.ps1')
 
 try {
     $projects = Invoke-RestMethod "$ApiBaseUrl/v2/projects" -TimeoutSec 15
@@ -39,29 +39,11 @@ try {
         throw 'Open the integration copy and enter its exact project name.'
     }
     $base = "$ApiBaseUrl/v2/projects/$([guid]$project[0].project_id)"
-    $types = @{ R1='dynamips'; R2='dynamips'; R3='dynamips'; R4='dynamips'; 'SW-CLIENT'='docker'; 'Client-A'='vpcs'; 'SW-SERVER'='docker'; 'Server-A'='vpcs' }
-    $nodes = @{}
-    $names = @{}
-    foreach ($n in (Invoke-RestMethod "$base/nodes" -TimeoutSec 15)) {
-        if ($nodes.ContainsKey($n.name) -or $types[$n.name] -ne $n.node_type -or $n.compute_id -ne 'vm' -or $n.status -ne 'started') {
-            throw "Unexpected or stopped integration node: $($n.name)."
-        }
-        $nodes[$n.name] = $n
-        $names[$n.node_id] = $n.name
-    }
-    foreach ($name in $types.Keys) { if (-not $nodes.ContainsKey($name)) { throw "Missing $name in the integration copy." } }
-    $expected = @(foreach ($link in $core.links) { Get-CableKey "$($link.a):$($link.a_adapter)" "$($link.b):$($link.b_adapter)" })
-    $expected += @('Client-A:0|SW-CLIENT:2','R1:3|SW-CLIENT:4','R4:4|SW-SERVER:4','Server-A:0|SW-SERVER:2')
-    $actual = @(foreach ($link in (Invoke-RestMethod "$base/links" -TimeoutSec 15)) {
-        if ($link.nodes.Count -ne 2 -or $link.link_type -ne 'ethernet' -or $link.suspend -or @($link.filters.PSObject.Properties).Count -gt 0) { throw 'Unexpected or impaired cable.' }
-        $ends = @(foreach ($e in $link.nodes) {
-            if ($e.port_number -ne 0 -or -not $names.ContainsKey($e.node_id)) { throw 'Unexpected cable endpoint.' }
-            "$($names[$e.node_id]):$($e.adapter_number)"
-        })
-        Get-CableKey $ends[0] $ends[1]
-    })
-    $diff = @(Compare-Object $expected $actual)
-    if ($diff.Count) { throw "Check integration cables: $($diff.InputObject -join ', ')." }
+    $nodeList = Invoke-RestMethod "$base/nodes" -TimeoutSec 15
+    $linkList = Invoke-RestMethod "$base/links" -TimeoutSec 15
+    $inventory = Get-IntegrationInventory $core $nodeList $linkList
+    $nodes = $inventory.Nodes
+    $result.privateLinkCabled = $inventory.Extended
     foreach ($name in 'R1','R4','SW-SERVER','Client-A','Server-A') {
         $n = $nodes[$name]
         if ($n.console_type -ne 'telnet' -or -not $n.console_host -or $n.console -lt 1) { throw "Missing Telnet endpoint for $name." }
@@ -69,6 +51,8 @@ try {
             else { Open-IosConsole $n.console_host $n.console -Vpcs:($n.node_type -eq 'vpcs') }
         if ($n.node_type -eq 'dynamips' -and $sessions[$name].Prompt -cne "$name#") { throw "Unexpected IOS hostname on $name." }
     }
+    $null = Invoke-Router R4 'show ip interface brief | include FastEthernet3/0'
+    $null = Invoke-Router R4 'show running-config | section ^interface FastEthernet3/0'
     Assert-ClientAddress 'Client-A' '192.168.10.11'
     Test-RoutedPing 'Client-A' '10.255.0.4'
     $config = Invoke-Router R4 'show running-config | section ^interface FastEthernet4/0'
