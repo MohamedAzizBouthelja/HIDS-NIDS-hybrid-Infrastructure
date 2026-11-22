@@ -50,7 +50,7 @@ are archived with source commit 3c9e910742530e61f6c23b386ce1ce69095ad53d.
 Run 44163708409 subsequently verified the direct tertiary backup in both
 directions and restored both transit interfaces.
 [Direct backup evidence](docs/evidence/2026-11-17/failover-direct-success/README.md).
-Cross-core VLAN routing, firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
+Live run 45026533848 verified client-to-server routing between VLANs 10 and 20. Firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
 
 | Work item | Status | Evidence |
 | --- | --- | --- |
@@ -75,7 +75,9 @@ Cross-core VLAN routing, firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain
 | Direct R1â€“R4 backup | Verified from live artifact | Run 44163708409 confirms the one-hop path in both directions with both transit interfaces shut, and verifies recovery through R3 and R2. |
 | Live repeat-deployment verification | Pending final evidence | Existing objects were reused during troubleshooting; a complete successful repeat run remains to be recorded |
 | OVS VLAN 10, RSTP and LACP member recovery | Verified in Switching-Pilot | [RSTP run 45008521242](docs/evidence/2026-11-22/ovs-rstp-45008521242-1.zip) and [LACP run 45010871992](docs/evidence/2026-11-22/ovs-lacp-45010871992-1success.zip) |
-| Cross-core VLAN routing, firewall, QoS, HIDS/NIDS and AWS/VPN | Pending | R1 VLAN 10 checkpoint passed as reported. R4 VLAN 20 is next |
+| Client-to-server routing between VLANs 10 and 20 | Verified in Hybrid-Core-Integration | All four probes passed 3/3. R1 learned 192.168.20.0/24 via R2 at 10.0.12.2, metric 21. R4 and Server-A acknowledged their saves. [Live run 45026533848](docs/evidence/2026-11-22/server-vlan-45026533848-1.zip) |
+| Ubuntu monitoring link | Verified from Ubuntu | R4 Loopback0 returned 3/3 via Tailscale. [Screenshot](docs/evidence/2026-11-22/ubuntu-to-r4.png) |
+| Zabbix server startup | Verified on Ubuntu | PostgreSQL schema loaded and server workers started. [Console evidence](#ubuntu-monitoring-checkpoint) |
 
 Evidence archives: [historical failures and neighbor tables](docs/evidence/2026-11-16/README.md)
 [successful OSPF baseline](docs/evidence/2026-11-17/README.md),
@@ -90,7 +92,7 @@ connection from the author's Ubuntu VM.
 | Component | Location | Role and observed configuration |
 | --- | --- | --- |
 | Author's Windows PC | Local workstation | Git repository, editing, documentation and GitHub access |
-| Author's Ubuntu VM | VMware on local workstation | Running with Internet access; no connection into the GNS3 data network established yet |
+| Author's Ubuntu VM | VMware on local workstation | Ubuntu 26.04.1 LTS with private connectivity to R4 through Tailscale |
 | Friend's Windows PC | Remote workstation | GNS3 desktop/controller and self-hosted GitHub Actions runner |
 | GNS3 VM | VMware on friend's PC | Linux compute server running Dynamips and lab devices |
 | GitHub | Private repository | Version control, manual workflow dispatch and artifacts |
@@ -625,11 +627,61 @@ Relevant commits present in the local repository:
 | `7982b56` | Syslog interruption handling during command echoes |
 | `d40a514` | Padded OSPF neighbor-state parser correction |
 
+### VLAN 10 integration evidence
+
+The [GNS3 topology](docs/evidence/2026-11-22/vlan10-integration/topology.png) shows Client-A, SW-CLIENT and the four routers running in `Hybrid-Core-Integration`, with R1 Fa3/0 connected to SW-CLIENT eth4.
+
+| Check | Observed result |
+| --- | --- |
+| R4 route to the client subnet | OSPF process 10 installed `192.168.10.0/24` as an intra-area route via R2 at `10.0.24.1` on Fa0/0, metric 21. [Route](docs/evidence/2026-11-22/vlan10-integration/r4-route.png) |
+| Client-A to R4 Loopback0 | Three replies from `10.255.0.4`. [Client ping](docs/evidence/2026-11-22/vlan10-integration/client-to-r4.png) |
+| R4 Loopback0 to Client-A | Three replies from `192.168.10.11` with source `10.255.0.4`. [R4 ping](docs/evidence/2026-11-22/vlan10-integration/r4-to-client.png) |
+| Core adjacencies | R1 shows R2, R3 and R4 FULL. R4 shows R1, R2 and R3 FULL. [R1 neighbors](docs/evidence/2026-11-22/vlan10-integration/r1-neighbors.png) · [R4 neighbors](docs/evidence/2026-11-22/vlan10-integration/r4-neighbors.png) |
+
+The user reported that all gateway checks passed. Two checklist outputs still need direct evidence: R1 `show ip interface brief` showing Fa3/0.10 at `192.168.10.1` up/up, and Client-A `ping 192.168.10.1 -c 3` showing 3/3. The supplied screenshots also omit the R1 and Client-A save acknowledgements.
+
+### Ubuntu monitoring checkpoint
+
+**22 November 2026.** The integration plan at commit `cf1485e` ran on Windows host `DESKTOP-TOEJEEO`. At that checkpoint the eight-node baseline passed, Client-A reached R4 Loopback0 (3/3), and R4 Fa3/0 was uncabled, unassigned and administratively down. The validator also accepts the planned gateway/NAT layout. [Runner job](https://github.com/MohamedAzizBouthelja/HIDS-NIDS-hybrid-Infrastructure/actions/runs/45029130996/job/137228597432) Â· [Plan result and IOS transcript](docs/evidence/2026-11-22/server-vlan-45029130996-1.zip)
+
+The subsequent Ubuntu test reached `10.255.0.4` via `tailscale0` using source `100.100.94.17`. All three probes returned, with 0% loss and a mean RTT of 158.337 ms. [Ubuntu route and ping screenshot](docs/evidence/2026-11-22/ubuntu-to-r4.png)
+
+**Database and server.** These results come from the operator's pasted Ubuntu console output.
+
+| Check | Observed result |
+| --- | --- |
+| PostgreSQL | `pg_lsclusters` showed cluster `18/main` online on port `5432`, owned by `postgres`. |
+| Database access | A local `psql` session as OS user `zabbix` returned `zabbix` for both `current_user` and `current_database()`. |
+| Zabbix schema | The post-import query returned mandatory version `8000000`, optional version `8000000` and 2 seeded users. |
+| Server startup | Zabbix Server 8.0.0 (revision `c81e276e505`) initially failed to authenticate to PostgreSQL over TCP with `fe_sendauth: no password supplied`. After switching to the local socket and restarting, the server started workers and processed items. |
+
+Selected lines from the post-restart log:
+
+```text
+11002:20261122:181539.941 server #38 started [history poller #1]
+11011:20261122:181539.967 server #43 started [availability manager #1]
+11026:20261122:181540.021 server #50 started [configuration syncer worker #1]
+10979:20261122:181540.029 [discovery worker #1] thread started [discovery worker #1]
+11021:20261122:181548.023 Zabbix agent item "system.swap.size[,free]" on host "Zabbix server" failed: first network error, wait for 15 seconds
+```
+
+The excerpt also reported unsupported internal items for inactive IPMI, Java poller and SNMP trapper processes. The agent error concerns the Ubuntu host's own swap item. A subsequent log check showed `server #36 started [icmp pinger #1]`. From the Ubuntu VM, `fping` running as the `zabbix` user received 3/3 replies from `10.255.0.4`.
+
+**R4 monitoring verified.** In Zabbix Latest data, host `R4` showed ICMP ping **Up (1)**, ICMP loss **0%**, and ICMP response time **107.83 ms**. All three rows showed a last check 13 seconds before capture. [Latest data screenshot](docs/evidence/2026-11-22/r4-zabbix-latest-data.png)
+
+### VLAN 20 API health check
+
+On 22 November 2026 at 19:26:03 GMT, R1 opened TCP port 8080 on `192.168.20.12` using `FastEthernet3/0.10` as its source interface. Its `GET /health HTTP/1.0` received `HTTP/1.0 200 OK` with the JSON body `{"status":"ok","service":"API-A"}`. The API access log records the same request from `192.168.10.1` with status 200. An earlier entry records the local health check from `192.168.20.12`. [R1 response](docs/evidence/2026-11-22/r1-to-api-health.png) and [API access log](docs/evidence/2026-11-22/api-access-log.png).
+
+The switch console confirmed access mode and VLAN tag 10 on SW-CLIENT eth3. The client requested `http://192.168.20.12:8080/health` and received HTTP 200 with `{"status":"ok","service":"API-A"}`. At 19:39:33 on 22 November 2026, API-A logged `192.168.10.12` requesting `GET /health HTTP/1.1` with status `200`. [Server access log](docs/evidence/2026-11-22/api-log-vlan10-client.png). [Switch port](docs/evidence/2026-11-22/sw-client-eth3-vlan10.png) and [client response](docs/evidence/2026-11-22/http-client-health.png).
+
 ## 8 Next actions
 
 1. The user confirmed all [R1 VLAN 10 gateway checks](docs/switching-pilot.md#connect-vlan-10-to-the-ospf-core) passed in the integration copy.
-2. Run [GNS3 routed server VLAN](docs/switching-pilot.md#run-the-r4-server-vlan-workflow) to configure the R4 VLAN 20 gateway and verify client-to-server routing in both directions.
-3. Archive original interface job and repeat-deployment evidence if available.
+2. Completed the R4 ICMP check in Zabbix. [Recorded sample](docs/evidence/2026-11-22/r4-zabbix-latest-data.png)
+3. Completed the VLAN 10 client-to-VLAN 20 API health check with matching client and server evidence. Use this endpoint for the later Wazuh, Suricata and Zabbix checks.
+4. Track remaining five-stage acceptance criteria in the [roadmap](README.md#next-milestones). Stage 2 explicitly requests comparable OSPF and EIGRP trials with an R2–R4 failure. Existing OSPF results cover an R1-side failure. The private monitoring link is a deployment prerequisite specific to the two-host layout.
+5. Archive original interface job and repeat-deployment evidence if available.
 
 The default failover workflow temporarily shuts R1 FastEthernet0/0. The
 direct-backup option also shuts R1 FastEthernet1/0. Cleanup attempts
