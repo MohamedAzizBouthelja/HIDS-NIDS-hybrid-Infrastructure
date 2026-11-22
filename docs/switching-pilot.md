@@ -347,3 +347,21 @@ five-link topology. Use the integration copy for the additional equipment.
 5. After the checks pass, save R1 with `copy running-config startup-config`
    and save Client-A with `save`. Retain the console outputs. The following
    stage adds the server switch and VLAN 20 gateway on R4.
+
+### Run the R4 server VLAN workflow
+
+After the R1 VLAN 10 checkpoint passes, add an Open vSwitch appliance named
+`SW-SERVER` and a VPCS named `Server-A` on the GNS3 VM in the integration
+copy. Cable R4 FastEthernet4/0 to SW-SERVER eth4 and Server-A Ethernet0 to
+SW-SERVER eth2. This assigns Fa4/0 to the server LAN and leaves Fa3/0
+available for the planned private link. Start all eight nodes, leave the
+server ports at their defaults and close the manual consoles.
+
+Run **GNS3 routed server VLAN** on main in **plan** mode using the integration
+project name. It checks the nine cables, the candidate interfaces and the
+existing Client-A to R4 loopback path. Run **apply** after plan passes.
+Apply configures the tagged trunk, VLAN 20 access port, R4 gateway
+192.168.20.1/24, passive OSPF interface and Server-A 192.168.20.11/24.
+It verifies the local gateway, R1's OSPF route via R2 and 3/3 client/server
+pings in each direction before saving R4 and Server-A. Download the
+`server-vlan` artifact for the result and console transcript.

@@ -75,7 +75,7 @@ Cross-core VLAN routing, firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain
 | Direct R1–R4 backup | Verified from live artifact | Run 44163708409 confirms the one-hop path in both directions with both transit interfaces shut, and verifies recovery through R3 and R2. |
 | Live repeat-deployment verification | Pending final evidence | Existing objects were reused during troubleshooting; a complete successful repeat run remains to be recorded |
 | OVS VLAN 10, RSTP and LACP member recovery | Verified in Switching-Pilot | [RSTP run 45008521242](docs/evidence/2026-11-22/ovs-rstp-45008521242-1.zip) and [LACP run 45010871992](docs/evidence/2026-11-22/ovs-lacp-45010871992-1success.zip) |
-| Cross-core VLAN routing, firewall, QoS, HIDS/NIDS and AWS/VPN | Pending | Next live checkpoint is the R1 VLAN 10 gateway |
+| Cross-core VLAN routing, firewall, QoS, HIDS/NIDS and AWS/VPN | Pending | R1 VLAN 10 checkpoint passed as reported. R4 VLAN 20 is next |
 
 Evidence archives: [historical failures and neighbor tables](docs/evidence/2026-11-16/README.md)
 [successful OSPF baseline](docs/evidence/2026-11-17/README.md),
@@ -627,8 +627,8 @@ Relevant commits present in the local repository:
 
 ## 8 Next actions
 
-1. Run the [R1 VLAN 10 gateway checkpoint](docs/switching-pilot.md#connect-vlan-10-to-the-ospf-core) in an integration copy of the core.
-2. After client-to-R4 loopback reachability passes, add the R4 VLAN 20 gateway and server endpoint. Verify client-to-server routing in both directions.
+1. The user confirmed all [R1 VLAN 10 gateway checks](docs/switching-pilot.md#connect-vlan-10-to-the-ospf-core) passed in the integration copy.
+2. Run [GNS3 routed server VLAN](docs/switching-pilot.md#run-the-r4-server-vlan-workflow) to configure the R4 VLAN 20 gateway and verify client-to-server routing in both directions.
 3. Archive original interface job and repeat-deployment evidence if available.
 
 The default failover workflow temporarily shuts R1 FastEthernet0/0. The
