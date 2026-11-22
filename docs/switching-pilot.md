@@ -289,3 +289,61 @@ eth1 restored. Download the `ovs-lacp` artifact for the completed
 checkpoints in `result.json` and raw console output. If conversion stops
 partway, rerun apply with the same project. It recognizes completed bonds
 and brings up both links after verifying both ends.
+
+### Connect VLAN 10 to the OSPF core
+
+The first routed checkpoint uses one access switch and one client. In GNS3,
+duplicate the saved four-router `Hybrid-Core-Lab` project as
+`Hybrid-Core-Integration`. Open the copy and start the four routers.
+The existing core workflows validate the original project ID and its exact
+five-link topology. Use the integration copy for the additional equipment.
+
+1. Confirm R1 and R4 can reach each other's loopbacks and have three FULL
+   OSPF neighbors each. On R1, check `show ip interface brief` and
+   `show running-config interface FastEthernet3/0`. Verify Fa3/0 is
+   uncabled, unaddressed and has no existing subinterfaces in the copy.
+2. Add a fresh OVS appliance named `SW-CLIENT` and a VPCS named `Client-A`
+   on the GNS3 VM. Cable R1 Fa3/0 to SW-CLIENT eth4 and Client-A Ethernet0
+   to SW-CLIENT eth2. Start both nodes. On the OVS console confirm
+   `ovs-vsctl port-to-br eth4` and `ovs-vsctl port-to-br eth2` both return
+   `br0`. Configure the client and router-facing ports.
+
+   ```sh
+   ovs-vsctl -- clear Port eth2 trunks -- set Port eth2 vlan_mode=access tag=10
+   ovs-vsctl -- clear Port eth4 tag -- set Port eth4 vlan_mode=trunk trunks=10
+   ```
+
+3. On the integration copy of R1, configure the gateway and advertise it
+   in the existing OSPF process. The passive subinterface advertises the
+   network without seeking neighbors on the client LAN.
+
+   ```text
+   configure terminal
+   interface FastEthernet3/0
+    no shutdown
+   exit
+   interface FastEthernet3/0.10
+    encapsulation dot1Q 10
+    ip address 192.168.10.1 255.255.255.0
+   exit
+   router ospf 10
+    passive-interface FastEthernet3/0.10
+    network 192.168.10.0 0.0.0.255 area 0
+   end
+   ```
+
+4. On Client-A set `ip 192.168.10.11/24 192.168.10.1`. Warm up ARP
+   with a gateway ping, then collect the following evidence.
+
+   | Where | Command | Pass condition |
+   | --- | --- | --- |
+   | R1 | `show ip interface brief` | Fa3/0.10 is up/up with 192.168.10.1 |
+   | Client-A | `ping 192.168.10.1 -c 3` | 3/3 replies from its gateway |
+   | R4 | `show ip route 192.168.10.0` | OSPF route for 192.168.10.0/24 via R2 (10.0.24.1) with the primary path healthy |
+   | Client-A | `ping 10.255.0.4 -c 3` | 3/3 replies from R4 |
+   | R4 | `ping 192.168.10.11 source Loopback0 repeat 3` | 3/3 replies from Client-A |
+   | R1 and R4 | `show ip ospf neighbor` | Three FULL core neighbors on each |
+
+5. After the checks pass, save R1 with `copy running-config startup-config`
+   and save Client-A with `save`. Retain the console outputs. The following
+   stage adds the server switch and VLAN 20 gateway on R4.

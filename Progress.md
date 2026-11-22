@@ -1,6 +1,6 @@
 # HIDS NIDS Hybrid Infrastructure Progress
 
-Last updated: 17 November 2026, Africa/Tunis
+Last updated: 22 November 2026, Africa/Tunis
 
 Configuration reference at this checkpoint: commit
 `d40a5140c7b63ead4476ed528b41608fe84e81eb`. This is the repository version
@@ -50,8 +50,7 @@ are archived with source commit 3c9e910742530e61f6c23b386ce1ce69095ad53d.
 Run 44163708409 subsequently verified the direct tertiary backup in both
 directions and restored both transit interfaces.
 [Direct backup evidence](docs/evidence/2026-11-17/failover-direct-success/README.md).
-VLANs,
-firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
+Cross-core VLAN routing, firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
 
 | Work item | Status | Evidence |
 | --- | --- | --- |
@@ -75,7 +74,8 @@ firewall, HIDS/NIDS, monitoring, QoS and AWS/VPN remain future work.
 | Sampled packet loss across failover and restoration | Verified from live artifact | Run 44160336159 recorded 5 consecutive timeouts in 24 post-shutdown probes and 0 in 25 post-restoration probes. See [the loss measurement archive](docs/evidence/2026-11-17/failover-loss-success/README.md). |
 | Direct R1–R4 backup | Verified from live artifact | Run 44163708409 confirms the one-hop path in both directions with both transit interfaces shut, and verifies recovery through R3 and R2. |
 | Live repeat-deployment verification | Pending final evidence | Existing objects were reused during troubleshooting; a complete successful repeat run remains to be recorded |
-| VLANs, managed switching, firewall, QoS, HIDS/NIDS and AWS/VPN | Not demonstrated | Architecture scope only at this checkpoint |
+| OVS VLAN 10, RSTP and LACP member recovery | Verified in Switching-Pilot | [RSTP run 45008521242](docs/evidence/2026-11-22/ovs-rstp-45008521242-1.zip) and [LACP run 45010871992](docs/evidence/2026-11-22/ovs-lacp-45010871992-1success.zip) |
+| Cross-core VLAN routing, firewall, QoS, HIDS/NIDS and AWS/VPN | Pending | Next live checkpoint is the R1 VLAN 10 gateway |
 
 Evidence archives: [historical failures and neighbor tables](docs/evidence/2026-11-16/README.md)
 [successful OSPF baseline](docs/evidence/2026-11-17/README.md),
@@ -627,10 +627,9 @@ Relevant commits present in the local repository:
 
 ## 8 Next actions
 
-1. Commit and push the direct backup evidence and updated documentation.
-2. Archive original interface job and repeat-deployment evidence if available.
-3. Cisco pilot provisioning is recorded in run 44800792003. Console outputs separately identify two Open vSwitch 2.17.12 appliances. Complete the [OVS VLAN pilot](docs/switching-pilot.md#open-vswitch-vlan-pilot), then run **GNS3 Open vSwitch RSTP** in plan, prepare and apply modes. The Cisco RSTP workflow was replaced. Live VLAN, RSTP and LACP evidence is pending.
-4. Integrate client and server VLANs with the routed core after the pilot passes. EIGRP, QoS, security monitoring and AWS/VPN remain later checkpoints.
+1. Run the [R1 VLAN 10 gateway checkpoint](docs/switching-pilot.md#connect-vlan-10-to-the-ospf-core) in an integration copy of the core.
+2. After client-to-R4 loopback reachability passes, add the R4 VLAN 20 gateway and server endpoint. Verify client-to-server routing in both directions.
+3. Archive original interface job and repeat-deployment evidence if available.
 
 The default failover workflow temporarily shuts R1 FastEthernet0/0. The
 direct-backup option also shuts R1 FastEthernet1/0. Cleanup attempts
@@ -638,6 +637,5 @@ direct-backup option also shuts R1 FastEthernet1/0. Cleanup attempts
 It never saves the temporary shutdown. A killed runner/process cannot execute
 cleanup; in that case manually restore this interface before another run.
 
-No managed switch, firewall, security monitoring stack, AWS instance or VPN
-has been demonstrated in this session. Full hybrid infrastructure and
+Firewall, security monitoring, AWS and VPN integration remain pending. Full hybrid infrastructure and
 HIDS/NIDS validation remain future milestones.
