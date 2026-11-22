@@ -81,12 +81,14 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
     $wakeReturns = 0
     $saveConfirmations = 0
     $handledConfirmationOffset = -1
+    $lastVpcsText = ''
+    $vpcsPromptMatched = $false
     while ($timer.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
         if ($Session.Stream.DataAvailable) {
             $read = $Session.Stream.Read($buffer, 0, $buffer.Length)
             if ($read -eq 0) { throw 'The router console closed its connection.' }
             [void]$text.Append((ConvertFrom-IosTelnet $Session $buffer[0..($read - 1)]))
-            $quietTimer.Restart()
+            if (-not $Vpcs) { $quietTimer.Restart() }
             if ($text.Length -gt 2097152) { throw 'Console output exceeded the response limit.' }
         }
         elseif ($Session.Client.Client.Poll(1000, [System.Net.Sockets.SelectMode]::SelectRead) -and $Session.Client.Available -eq 0) {
@@ -99,8 +101,15 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
             # VPCS can indent its prompt and include terminal framing bytes.
             # Require a complete prompt on the final line before accepting it.
             $vpcsText = $plain -replace '[^\x20-\x7e\r\n\t]', ''
+            # GNS3 can send Telnet control traffic without printing anything.
+            # Measure VPCS quiet time from visible changes, not socket reads.
+            if ($vpcsText -cne $lastVpcsText) {
+                $lastVpcsText = $vpcsText
+                $quietTimer.Restart()
+            }
             $vpcsPrompt = [regex]::Match($vpcsText.TrimEnd(), '(?:^|[\r\n])[ \t]*([A-Za-z0-9_.:-]+(?:\[\d+\])?>)\z')
-            if ($vpcsPrompt.Success -and $quietTimer.ElapsedMilliseconds -ge 100 -and
+            $vpcsPromptMatched = $vpcsPrompt.Success
+            if ($vpcsPromptMatched -and $quietTimer.ElapsedMilliseconds -ge 100 -and
                 (Test-IosCommandEcho $vpcsText $ExpectedEcho)) {
                 $Session.Prompt = $vpcsPrompt.Groups[1].Value
                 return $vpcsText
@@ -152,7 +161,7 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
         $tail = $text.ToString([Math]::Max(0, $text.Length - 256), [Math]::Min(256, $text.Length))
         $escaped = ConvertTo-Json -InputObject $tail -Compress
         $bytes = ($tail.ToCharArray() | ForEach-Object { '{0:X2}' -f [int]$_ }) -join ' '
-        throw "Timed out waiting for a VPCS prompt. Console tail: $escaped. Tail bytes: $bytes"
+        throw "Timed out waiting for a VPCS prompt. Prompt matched: $vpcsPromptMatched. Visible quiet time: $($quietTimer.ElapsedMilliseconds) ms. Console tail: $escaped. Tail bytes: $bytes"
     }
     throw "Timed out waiting for an IOS prompt after '$ExpectedEcho'. Last output: $($text.ToString())"
 }
