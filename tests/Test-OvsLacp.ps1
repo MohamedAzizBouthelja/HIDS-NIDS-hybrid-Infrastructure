@@ -9,11 +9,26 @@ $script:bonds = @{}
 $script:rstp = @{ left = 'true'; right = 'true' }
 $script:diagnostics = 0
 $script:failProbe = $false
+$script:baselineFailures = 0
+$script:cleared = @()
+$script:traces = @()
+function Invoke-VpcsCommand($Node,$Command,$Pattern) {
+    if ($Command -eq 'clear arp') { $script:cleared += $Node; return }
+    return 'MAC : 00:50:79:66:68:00'
+}
+function Invoke-VpcsPing($Node,$Destination,$Count) {
+    if ($Node -ne 'Client-B' -or $Destination -ne '192.168.10.11') { throw 'Unexpected probe' }
+    return @{ replies = 1 }
+}
 function Assert-OvsPort {}
 function Save-Result {}
 function Test-AdminUp { return $false }
 function Restore-Uplink { $script:down = '' }
 function Assert-ClientPings($Phase) {
+    if ($Phase -eq 'baseline' -and $script:baselineFailures -gt 0) {
+        $script:baselineFailures--
+        throw 'injected baseline failure'
+    }
     if ($script:failProbe -and $Phase -eq 'eth0 down') { throw 'injected ping failure' }
 }
 function Invoke-Ovs($Node, $Command) {
@@ -26,7 +41,9 @@ function Invoke-Ovs($Node, $Command) {
         }
         'ovs-vsctl --columns=*' { return '' }
         'ovs-appctl fdb/show br0' { $script:diagnostics++; return '' }
-        'ovs-ofctl dump-ports br0' { return '' }
+        'ovs-ofctl *' { return '' }
+        '*get Interface * ofport' { return '3' }
+        '*ofproto/trace*' { $script:traces += $Command; return 'Datapath actions: drop' }
         '*get Interface * _uuid' { return ($Command -split ' ')[3] }
         '*get Port bond0 interfaces' { return '[eth0, eth1]' }
         '*get Port bond0 lacp bond_mode' { return "active`n$($script:bonds[$Node])" }
@@ -59,4 +76,12 @@ $script:failProbe = $true
 try { Invoke-LacpPilot; throw 'Expected ping failure' } catch { if ($_.Exception.Message -ne 'injected ping failure') { throw } }
 if ($script:diagnostics -ne 2 -or $script:rstp[$left] -ne 'false') { throw 'Missing diagnostics or existing bond repair' }
 if ($script:down) { throw 'Failed to restore interrupted member' }
+$script:failProbe = $false
+$script:baselineFailures = 1
+Invoke-LacpPilot
+if (($script:cleared -join ',') -ne 'Client-A,Client-B') { throw 'Expected both clients to refresh ARP' }
+$script:baselineFailures = 2
+$script:traces = @()
+try { Invoke-LacpPilot; throw 'Persistent failure passed' } catch { if ($_.Exception.Message -ne 'injected baseline failure') { throw } }
+if ($result.checkpoints.Count -or $script:traces.Count -ne 2 -or $script:traces[1] -notmatch 'dl_vlan=10') { throw 'Missing failed-baseline evidence' }
 Write-Output 'Passed LACP conversion, both member tests, rerun and failure cleanup.'

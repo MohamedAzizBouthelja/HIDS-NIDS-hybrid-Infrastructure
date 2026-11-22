@@ -18,6 +18,31 @@ function Test-PilotBond([string] $Node) {
     return $true
 }
 
+function Repair-PilotNeighbors {
+    foreach ($client in 'Client-A','Client-B') {
+        # clear arp can finish silently at the VPCS prompt.
+        $null = Invoke-VpcsCommand $client 'clear arp' '(?im)^clear arp[ \t\r]*$'
+    }
+    $reverse = Invoke-VpcsPing 'Client-B' '192.168.10.11' 1
+    Write-Host "Client-B to Client-A warm-up: $($reverse.replies)/1 replies."
+}
+
+function Write-PilotArpTrace([string] $ActivePort) {
+    $ipInfo = Invoke-VpcsCommand 'Client-A' 'show ip' '(?i)IP/MASK[ \t]*:'
+    $match = [regex]::Match($ipInfo, '(?im)^MAC[ \t]*:[ \t]*((?:[0-9a-f]{2}:){5}[0-9a-f]{2})[ \t]*$')
+    if (-not $match.Success) { throw 'Could not read Client-A MAC address.' }
+    $arp = "arp,arp_op=1,arp_spa=192.168.10.11,arp_tpa=192.168.10.12,dl_src=$($match.Groups[1].Value),dl_dst=ff:ff:ff:ff:ff:ff"
+    foreach ($node in $left,$right) {
+        $ingress = if ($node -eq $left) { 'eth2' } else { $ActivePort }
+        $number = Invoke-Ovs $node "ovs-vsctl get Interface $ingress ofport"
+        if ($number -notmatch '^[1-9][0-9]*$') { throw "Invalid OpenFlow port for $node $ingress." }
+        $flow = "in_port=$number,$arp"
+        if ($node -eq $right) { $flow += ',dl_vlan=10' }
+        $trace = Invoke-Ovs $node "ovs-appctl ofproto/trace br0 '$flow'"
+        Write-Host "$node simulated ARP ingress on ${ingress}:`n$trace"
+    }
+}
+
 function Wait-PilotBond([string] $Phase, [string] $Down) {
     $activePort = if ($Down -eq 'eth0') { 'eth1' } else { 'eth0' }
     for ($i = 0; $i -lt $Attempts; $i++) {
@@ -37,17 +62,28 @@ function Wait-PilotBond([string] $Phase, [string] $Down) {
             }
         }
         if ($ready) {
-            try { Assert-ClientPings $Phase }
+            try {
+                try { Assert-ClientPings $Phase }
+                catch {
+                    if ($Phase -ne 'baseline') { throw }
+                    Write-Warning $_.Exception.Message
+                    Repair-PilotNeighbors
+                    Assert-ClientPings $Phase
+                }
+            }
             catch {
                 $pingError = $_
                 foreach ($switch in $left,$right) {
                     foreach ($command in 'ovs-vsctl --columns=name,vlan_mode,tag,trunks list Port',
                             'ovs-vsctl --columns=name,ofport,admin_state,link_state,error list Interface',
-                            'ovs-appctl fdb/show br0', 'ovs-ofctl dump-ports br0') {
+                            'ovs-appctl fdb/show br0', 'ovs-ofctl dump-ports br0',
+                            'ovs-ofctl show br0', 'ovs-ofctl dump-flows br0') {
                         try { $null = Invoke-Ovs $switch $command }
                         catch { Write-Warning "Diagnostic failed on ${switch}: $command" }
                     }
                 }
+                try { Write-PilotArpTrace $activePort }
+                catch { Write-Warning "ARP forwarding trace failed: $($_.Exception.Message)" }
                 throw $pingError
             }
             $result.checkpoints += $Phase
