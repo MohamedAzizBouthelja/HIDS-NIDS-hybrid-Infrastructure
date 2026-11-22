@@ -12,19 +12,22 @@ function Test-PilotBond([string] $Node) {
     $members = (Invoke-Ovs $Node 'ovs-vsctl get Port bond0 interfaces').Trim('[]') -split ',\s*'
     $expectedIds = foreach ($port in 'eth0','eth1') { Invoke-Ovs $Node "ovs-vsctl get Interface $port _uuid" }
     if ($members.Count -ne 2 -or (Compare-Object $members $expectedIds) -or
-        ((Invoke-Ovs $Node 'ovs-vsctl get Port bond0 lacp bond_mode') -replace '[\s"]','') -ne 'activebalance-tcp') {
-        throw "$Node bond0 must be an active balance-tcp bond containing exactly eth0 and eth1."
+        ((Invoke-Ovs $Node 'ovs-vsctl get Port bond0 lacp bond_mode') -replace '[\s"]','') -notin 'activebalance-tcp','activeactive-backup') {
+        throw "$Node bond0 must use active LACP with balance-tcp or active-backup and contain exactly eth0 and eth1."
     }
     return $true
 }
 
 function Wait-PilotBond([string] $Phase, [string] $Down) {
+    $activePort = if ($Down -eq 'eth0') { 'eth1' } else { 'eth0' }
     for ($i = 0; $i -lt $Attempts; $i++) {
         $ready = $true
         foreach ($name in $left,$right) {
             $bond = Invoke-Ovs $name 'ovs-appctl bond/show bond0'
             $lacp = Invoke-Ovs $name 'ovs-appctl lacp/show bond0'
             if ($bond -notmatch '(?m)^lacp_status: negotiated\s*$') { $ready = $false }
+            if ($bond -notmatch '(?m)^bond_mode: active-backup\s*$' -or
+                $bond -notmatch "(?m)^active member mac: [^\r\n]*\($activePort\)\s*$") { $ready = $false }
             foreach ($port in 'eth0','eth1') {
                 if ($port -eq $Down) {
                     if ($bond -notmatch "(?m)^member ${port}: disabled\s*$") { $ready = $false }
@@ -66,7 +69,7 @@ function Invoke-LacpPilot {
             foreach ($port in 'eth0','eth1') { $null = Invoke-Ovs $name "ip link set $port down" }
         }
         foreach ($name in $pending) {
-            $null = Invoke-Ovs $name 'ovs-vsctl -- del-port br0 eth0 -- del-port br0 eth1 -- add-bond br0 bond0 eth0 eth1 -- set Port bond0 vlan_mode=trunk trunks=10,30,99 lacp=active bond_mode=balance-tcp other_config:lacp-time=fast'
+            $null = Invoke-Ovs $name 'ovs-vsctl -- del-port br0 eth0 -- del-port br0 eth1 -- add-bond br0 bond0 eth0 eth1 -- set Port bond0 vlan_mode=trunk trunks=10,30,99 lacp=active bond_mode=active-backup other_config:lacp-time=fast other_config:bond-primary=eth0'
         }
     }
     foreach ($name in $left,$right) {
@@ -75,6 +78,8 @@ function Invoke-LacpPilot {
     # Both ends now have one verified logical uplink. OVS 2.17 does not
     # support RSTP on bonded ports. Also normalize a previous partial run.
     foreach ($name in $left,$right) {
+        # Migrate existing balance-tcp bonds in place on reruns.
+        $null = Invoke-Ovs $name 'ovs-vsctl set Port bond0 bond_mode=active-backup other_config:bond-primary=eth0 other_config:lacp-time=fast'
         $null = Invoke-Ovs $name 'ovs-vsctl set Bridge br0 stp_enable=false rstp_enable=false'
         if ((Invoke-Ovs $name 'ovs-vsctl get Bridge br0 rstp_enable') -ne 'false') {
             throw "$name still has RSTP enabled after bond conversion."

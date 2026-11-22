@@ -29,8 +29,11 @@ function Invoke-Ovs($Node, $Command) {
         'ovs-ofctl dump-ports br0' { return '' }
         '*get Interface * _uuid' { return ($Command -split ' ')[3] }
         '*get Port bond0 interfaces' { return '[eth0, eth1]' }
-        '*get Port bond0 lacp bond_mode' { return "active`nbalance-tcp" }
-        '*add-bond*' { $script:bonds[$Node] = $true }
+        '*get Port bond0 lacp bond_mode' { return "active`n$($script:bonds[$Node])" }
+        '*add-bond*bond_mode=active-backup*' { $script:bonds[$Node] = 'active-backup' }
+        'ovs-vsctl set Port bond0 bond_mode=active-backup other_config:bond-primary=eth0 other_config:lacp-time=fast' {
+            $script:bonds[$Node] = 'active-backup'
+        }
         'ip link set * down' { $script:down = ($Command -split ' ')[3] }
         'ip link set * up' { $script:down = '' }
         '*bond/show*' {
@@ -38,7 +41,8 @@ function Invoke-Ovs($Node, $Command) {
                 $state = if ($port -eq $script:down) { 'disabled' } else { 'enabled' }
                 "member ${port}: $state"
             }
-            return (@('lacp_status: negotiated') + $lines -join "`n")
+            $active = if ($script:down -eq 'eth0') { 'eth1' } else { 'eth0' }
+            return (@('lacp_status: negotiated', "bond_mode: $($script:bonds[$Node])", "active member mac: 02:00:00:00:00:01($active)") + $lines -join "`n")
         }
         '*lacp/show*' { return "member: eth0: current attached`nmember: eth1: current attached" }
         default { throw "Unexpected $Command" }
@@ -47,6 +51,9 @@ function Invoke-Ovs($Node, $Command) {
 Invoke-LacpPilot
 if (($result.checkpoints -join ',') -ne 'baseline,eth0 down,eth0 restored,eth1 down,eth1 restored') { throw 'Missing checkpoints' }
 if ($script:rstp.Values -contains 'true') { throw 'RSTP still enabled' }
+$script:bonds = @{ left = 'balance-tcp'; right = 'balance-tcp' }
+Invoke-LacpPilot
+if ($script:bonds.Values -contains 'balance-tcp') { throw 'Existing bonds were not migrated' }
 $script:rstp[$left] = 'true'
 $script:failProbe = $true
 try { Invoke-LacpPilot; throw 'Expected ping failure' } catch { if ($_.Exception.Message -ne 'injected ping failure') { throw } }

@@ -275,7 +275,10 @@ After RSTP apply passes, keep both inter-switch cables connected and close
 the manual consoles. Run **GNS3 Open vSwitch LACP** with the same project
 name. Use **plan** to check the cabling. **Apply** takes both trunks down
 during conversion and leaves an active LACP trunk named `bond0` on each
-bridge, carrying tagged VLANs 10, 30 and 99. Apply disables bridge RSTP
+bridge, carrying tagged VLANs 10, 30 and 99. Apply migrates existing
+pilot balance-tcp bonds in place. Active-backup forwarding prefers eth0
+on both switches and uses eth1 when eth0 fails. This tests redundancy
+with one transmitting member per switch. Apply disables bridge RSTP
 only after both bonds pass configuration checks. On a ping failure, the
 console transcript includes VLAN settings, interface state, learned MAC
 addresses and port counters from both switches.
