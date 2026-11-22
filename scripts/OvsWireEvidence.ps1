@@ -56,10 +56,15 @@ function Write-PilotWireEvidence {
         $null = Invoke-VpcsPing 'Client-A' '192.168.10.12' 1
         foreach ($label in $started.Keys) {
             try {
-                $file = Join-Path (Resolve-Path $EvidenceDirectory).Path "$label.pcap"
+                $file = Join-Path (Resolve-Path $EvidenceDirectory).Path "$label-$([guid]::NewGuid().ToString('N')).pcap"
                 # The GNS3 endpoint streams until disconnected. Retain the received prefix.
                 & curl.exe --silent --fail --max-time 3 --output $file "$($started[$label])/pcap"
                 if ($LASTEXITCODE -notin 0,28) { throw "PCAP stream returned curl exit $LASTEXITCODE." }
+                if ($LASTEXITCODE -eq 28 -and -not (Test-Path -LiteralPath $file -PathType Leaf)) {
+                    $result.wire_observations[$label] = @{ status = 'stream timed out without data' }
+                    Write-Warning "No capture data returned for $label before timeout."
+                    continue
+                }
                 $observation = Read-PilotArpCapture $file
                 $result.wire_observations[$label] = $observation
                 Write-Host "ARP on ${label}: $($observation | ConvertTo-Json -Compress)"

@@ -10,6 +10,7 @@ $script:rstp = @{ left = 'true'; right = 'true' }
 $script:diagnostics = 0
 $script:failProbe = $false
 $script:baselineFailures = 0
+$script:floodRepairs = @()
 $script:cleared = @()
 $script:traces = @()
 function Invoke-VpcsCommand($Node,$Command,$Pattern) {
@@ -42,6 +43,13 @@ function Invoke-Ovs($Node, $Command) {
         }
         'ovs-vsctl --columns=*' { return '' }
         'ovs-appctl fdb/show br0' { $script:diagnostics++; return '' }
+        'ovs-ofctl mod-port*' {
+            if ($Command -notmatch '^ovs-ofctl mod-port br0 (eth[012]) no-flood; ovs-ofctl mod-port br0 \1 flood$') {
+                throw "Unexpected flood repair: $Command"
+            }
+            $script:floodRepairs += "$Node/$($Matches[1])"
+            return ''
+        }
         'ovs-ofctl *' { return '' }
         '*get Interface * ofport' { return '3' }
         'ovs-appctl dpif/show' { return 'eth2 3/15' }
@@ -81,6 +89,7 @@ if ($script:down) { throw 'Failed to restore interrupted member' }
 $script:failProbe = $false
 $script:baselineFailures = 1
 Invoke-LacpPilot
+if (($script:floodRepairs -join ',') -ne 'left/eth0,left/eth1,left/eth2,right/eth0,right/eth1,right/eth2') { throw 'Wrong flood repair scope' }
 if (($script:cleared -join ',') -ne 'Client-A,Client-B') { throw 'Expected both clients to refresh ARP' }
 $script:baselineFailures = 2
 $script:traces = @()

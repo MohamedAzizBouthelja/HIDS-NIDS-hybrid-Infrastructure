@@ -18,6 +18,17 @@ function Test-PilotBond([string] $Node) {
     return $true
 }
 
+function Restore-PilotFlooding {
+    # OVS 2.17 recalculates bundle flood eligibility on a NO_FLOOD
+    # transition. A plain "flood" can be a no-op after disabling RSTP.
+    foreach ($node in $left,$right) {
+        foreach ($port in 'eth0','eth1','eth2') {
+            $null = Invoke-Ovs $node "ovs-ofctl mod-port br0 $port no-flood; ovs-ofctl mod-port br0 $port flood"
+        }
+    }
+    Write-Host 'Refreshed flooding on both bond members and the VLAN 10 access port on each switch.'
+}
+
 function Repair-PilotNeighbors {
     foreach ($client in 'Client-A','Client-B') {
         # clear arp can finish silently at the VPCS prompt.
@@ -69,6 +80,7 @@ function Wait-PilotBond([string] $Phase, [string] $Down) {
                 catch {
                     if ($Phase -ne 'baseline') { throw }
                     Write-Warning $_.Exception.Message
+                    Restore-PilotFlooding
                     Repair-PilotNeighbors
                     Assert-ClientPings $Phase
                 }
