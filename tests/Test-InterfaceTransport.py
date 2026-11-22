@@ -454,8 +454,56 @@ def check_live_challenges():
             server.server_close()
 
 
+def check_vpcs_console_prompt():
+    """Private terminal modes and titles cannot obscure VPCS prompts."""
+    received = bytearray()
+
+    class VpcsHandler(socketserver.BaseRequestHandler):
+        def handle(self):
+            self.request.settimeout(5)
+            pending = bytearray()
+            while data := self.request.recv(1024):
+                received.extend(data)
+                pending.extend(data)
+                while b"\r" in pending:
+                    command, _, rest = pending.partition(b"\r")
+                    pending = bytearray(rest)
+                    if not command:
+                        self.request.sendall(b"\r\nWelcome to Virtual PC Simulator, version 0.8.3\r\nVPCS> \r\n\x1b[?")
+                    else:
+                        self.request.sendall(b"\r\n84 bytes from 192.168.10.12 icmp_seq=1 ttl=64 time=1 ms\r\n\x1b[?")
+                    time.sleep(0.05)
+                    self.request.sendall(b"2004h\x1b]0;VPCS\x07VPCS> \x07")
+
+    with ConsoleServer(("127.0.0.1", 0), VpcsHandler) as server:
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        transport = str(ROOT / "scripts/IosConsole.ps1").replace("'", "''")
+        code = (
+            f"$ErrorActionPreference='Stop'; . '{transport}'; "
+            f"$session=Open-IosConsole '127.0.0.1' {server.server_address[1]} -Vpcs; "
+            "try { "
+            "if ($session.Prompt -cne 'VPCS>') { throw 'Wrong VPCS prompt' }; "
+            "$bytes=[Text.Encoding]::ASCII.GetBytes(('ping 192.168.10.12 -c 1' + [char]13)); "
+            "$session.Stream.Write($bytes,0,$bytes.Length); "
+            "$reply=Read-IosResponse $session -TimeoutSeconds 2; "
+            "if ($reply -notmatch 'icmp_seq=1') { throw 'Missing VPCS ping result' } "
+            "} finally { Close-IosConsole $session }"
+        )
+        try:
+            result = subprocess.run(
+                [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", code],
+                capture_output=True, text=True, errors="replace", timeout=8,
+            )
+            assert result.returncode == 0, (result.stdout, result.stderr)
+            assert received == b"\rping 192.168.10.12 -c 1\r", received
+            print("PASS: styled VPCS startup and ping prompts over TCP")
+        finally:
+            server.shutdown()
+
+
 if __name__ == "__main__":
     main()
     check_live_challenges()
     check_interleaved_echo()
     check_nvram_confirmation()
+    check_vpcs_console_prompt()

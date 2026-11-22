@@ -92,7 +92,9 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
         elseif ($Session.Client.Client.Poll(1000, [System.Net.Sockets.SelectMode]::SelectRead) -and $Session.Client.Available -eq 0) {
             throw 'The router console disconnected while waiting for a prompt.'
         }
-        $plain = $text.ToString() -replace '\x1b\[[0-9;]*[A-Za-z]', ''
+        # Terminal private-mode sequences such as ESC[?2004h, window titles,
+        # and bells can sit beside a visible VPCS prompt.
+        $plain = $text.ToString() -replace '\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x07', ''
         $terminal = Get-IosTerminalState $plain
         if ($terminal.Kind -eq 'confirmation' -and $quietTimer.ElapsedMilliseconds -ge 500) {
             $offset = $plain.LastIndexOf($terminal.Detail, [System.StringComparison]::Ordinal)
