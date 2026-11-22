@@ -1,0 +1,46 @@
+name: GNS3 Open vSwitch RSTP
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Inspect wiring, prepare RSTP on one trunk, or test failover on two trunks
+        type: choice
+        options: [plan, prepare, apply]
+        default: plan
+      project_name:
+        description: Exact name of the open, isolated OVS pilot project
+        type: string
+        default: Switching-Pilot-OVS
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gns3-core-topology
+  cancel-in-progress: false
+
+jobs:
+  ovs-rstp:
+    runs-on: [self-hosted, Windows, X64, gns-lab]
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Prepare or verify OVS RSTP
+        env:
+          OVS_RSTP_MODE: ${{ inputs.mode }}
+          OVS_PROJECT: ${{ inputs.project_name }}
+        run: ./scripts/Test-OvsRstp.ps1 -Mode $env:OVS_RSTP_MODE -ProjectName $env:OVS_PROJECT
+      - name: Save OVS RSTP evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ovs-rstp-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/ovs-rstp/
+          if-no-files-found: warn
+          retention-days: 7

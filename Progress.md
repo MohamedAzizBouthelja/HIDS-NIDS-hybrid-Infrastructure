@@ -629,7 +629,7 @@ Relevant commits present in the local repository:
 
 1. Commit and push the direct backup evidence and updated documentation.
 2. Archive original interface job and repeat-deployment evidence if available.
-3. Cisco pilot provisioning is recorded in run 44800792003. Console outputs separately identify OpenvSwitch-1 and OpenvSwitch-2 as Open vSwitch 2.17.12, with `eth0` through `eth15` on `br0`. The outputs do not map these console names to the provisioned Cisco nodes. The [Open vSwitch VLAN pilot](docs/switching-pilot.md#open-vswitch-vlan-pilot) is ready to run on an isolated canvas. Live VLAN, RSTP and LACP results are pending.
+3. Cisco pilot provisioning is recorded in run 44800792003. Console outputs separately identify two Open vSwitch 2.17.12 appliances. Complete the [OVS VLAN pilot](docs/switching-pilot.md#open-vswitch-vlan-pilot), then run **GNS3 Open vSwitch RSTP** in plan, prepare and apply modes. The Cisco RSTP workflow was replaced. Live VLAN, RSTP and LACP evidence is pending.
 4. Integrate client and server VLANs with the routed core after the pilot passes. EIGRP, QoS, security monitoring and AWS/VPN remain later checkpoints.
 
 The default failover workflow temporarily shuts R1 FastEthernet0/0. The

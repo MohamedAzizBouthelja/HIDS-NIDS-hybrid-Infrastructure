@@ -132,25 +132,13 @@ Client-A still reaches Client-B. Restore Test-C's planned
 
 ## Verify rapid spanning tree with two trunks
 
-Cable SW-A1 Gi0/1 to SW-A2 Gi0/1 and bring Gi0/1 up on both ends. Keep
-both links as independent trunks for this test. Close the switch and
-client consoles so the runner can use them.
-
-Run **GNS3 switching RSTP** in **plan** mode to check the project and all
-five cables, then run **apply**. The workflow checks Rapid PVST and
-requires SW-A1 to be the VLAN 10 root. It identifies the forwarding and
-blocked uplinks on SW-A2, tests baseline pings, shuts the forwarding
-uplink, confirms the alternate forwards, and retests the pings. It restores
-the original uplink even if the test fails. To pass, both trunks must return
-to the redundant spanning-tree state and all three measured pings must
-succeed in both directions at each checkpoint.
+For an IOSvL2 pilot, cable SW-A1 Gi0/1 to SW-A2 Gi0/1 after Rapid PVST
+and both standalone trunks are configured. Check `show spanning-tree vlan 10`
+and identify the forwarding and alternate ports on SW-A2. Confirm the client
+pings, shut the forwarding port on SW-A2, and verify the alternate forwards
+and the pings recover. Use `no shutdown` to restore the original port and
+check both spanning-tree roles and pings again.
 [Cisco spanning-tree output reference](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/lanswitch/configuration/xe-3s/asr903/lanswitch-xe-3s-asr903-book/lanswitch-xe-3s-asr903-book_chapter_0110.pdf).
-
-Download the `switching-rstp` artifact. It contains `result.json` and
-`console-transcript.json`. If the runner is stopped mid-test or
-`restoration_error` is present, inspect SW-A2 and use `no shutdown` on
-the port named in `interrupted_port` if administratively down. The test
-does not write the startup configuration. Begin LACP after the live RSTP run passes.
 
 ## Verify LACP and member recovery
 
@@ -198,7 +186,9 @@ expect the QEMU IOSvL2 nodes and Cisco commands.
 
 Before configuring anything, verify these four cables on the canvas.
 Keep all other switch ports uncabled, especially the second inter-switch
-link.
+link. Name the project `Switching-Pilot-OVS`, or enter its exact name in
+the RSTP workflow. Place both OVS appliances and all three VPCS on the
+GNS3 VM. Use the node names listed below.
 
 | Port | Peer |
 | --- | --- |
@@ -250,3 +240,28 @@ ovs-vsctl --columns=name,vlan_mode,tag,trunks list Port
 
 [Open vSwitch VLAN configuration](https://docs.openvswitch.org/en/stable/faq/configuration/) ·
 [OVS port VLAN fields](https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.conf.db.5.html).
+
+### Run the OVS RSTP workflow
+
+Once the VLAN test passes, open the isolated project in GNS3 on the runner
+side. Start the switches and clients and close their manual consoles.
+Run **GNS3 Open vSwitch RSTP** with the following modes in sequence.
+
+1. **plan** checks the five nodes and the cable map using the GNS3 API.
+2. **prepare** requires `eth1` to be uncabled. It verifies the VLAN port
+   settings and bidirectional client pings, prepares `eth1` as a tagged
+   trunk, and enables bridge RSTP. It assigns OpenvSwitch-1 the lower
+   bridge priority and verifies VLAN 10 connectivity on the single trunk.
+   Connect `eth1` to `eth1` only after prepare passes.
+3. **apply** verifies a forwarding root port and a discarding alternate
+   on OpenvSwitch-2. It shuts the forwarding port briefly, checks that the
+   alternate takes over and that both clients get 3/3 replies, then
+   restores the port and checks redundancy and connectivity again.
+
+Download the `ovs-rstp` artifact for `result.json` and
+`console-transcript.json`. If the runner is stopped during apply or a
+restore fails, inspect the port named by `interrupted_port` on OpenvSwitch-2
+and bring it up with `ip link set eth0 up` or `ip link set eth1 up`,
+depending on which port was taken down. OVS RSTP runs per bridge. The pings
+in this workflow verify that VLAN 10 traffic follows the resulting tree.
+[OVS RSTP fields](https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.conf.db.5.html).

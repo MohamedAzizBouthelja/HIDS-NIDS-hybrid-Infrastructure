@@ -152,7 +152,7 @@ function Send-IosCommand($Session, [string] $Command, [int] $TimeoutSeconds = 30
     return $output
 }
 
-function Open-IosConsole([string] $Address, [int] $Port, [switch] $Vpcs, [switch] $AllowConfigMode) {
+function Open-Gns3Telnet([string] $Address, [int] $Port) {
     $client = [System.Net.Sockets.TcpClient]::new()
     try {
         $pending = $client.BeginConnect($Address, $Port, $null, $null)
@@ -165,11 +165,18 @@ function Open-IosConsole([string] $Address, [int] $Port, [switch] $Vpcs, [switch
         $stream = $client.GetStream()
         $stream.ReadTimeout = 5000
         $stream.WriteTimeout = 5000
-        $session = [pscustomobject]@{
+        return [pscustomobject]@{
             Client = $client; Stream = $stream; Prompt = ''
             TelnetState = 'data'; TelnetCommand = 0
         }
-        $stream.Write([byte[]]@(13), 0, 1)
+    }
+    catch { $client.Close(); throw }
+}
+
+function Open-IosConsole([string] $Address, [int] $Port, [switch] $Vpcs, [switch] $AllowConfigMode) {
+    $session = Open-Gns3Telnet $Address $Port
+    try {
+        $session.Stream.Write([byte[]]@(13), 0, 1)
         $null = Read-IosResponse $session -AllowInitialReturn
         if ($Vpcs) {
             if (-not $session.Prompt.EndsWith('>')) { throw 'Expected a VPCS console prompt.' }
@@ -184,7 +191,7 @@ function Open-IosConsole([string] $Address, [int] $Port, [switch] $Vpcs, [switch
         $null = Send-IosCommand $session 'terminal length 0'
         return $session
     }
-    catch { $client.Close(); throw }
+    catch { Close-IosConsole $session; throw }
 }
 
 function Close-IosConsole($Session) {
