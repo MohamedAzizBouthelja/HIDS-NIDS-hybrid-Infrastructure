@@ -1,0 +1,46 @@
+name: GNS3 Open vSwitch LACP
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Inspect two-trunk wiring or configure LACP and test each member
+        type: choice
+        options: [plan, apply]
+        default: plan
+      project_name:
+        description: Exact name of the open, isolated OVS pilot project
+        type: string
+        default: Switching-Pilot-OVS
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gns3-core-topology
+  cancel-in-progress: false
+
+jobs:
+  ovs-lacp:
+    runs-on: [self-hosted, Windows, X64, gns-lab]
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Configure or verify OVS LACP
+        env:
+          OVS_LACP_MODE: ${{ inputs.mode }}
+          OVS_PROJECT: ${{ inputs.project_name }}
+        run: ./scripts/Test-OvsRstp.ps1 -Mode "lacp-$env:OVS_LACP_MODE" -EvidenceDirectory artifacts/ovs-lacp -ProjectName $env:OVS_PROJECT
+      - name: Save OVS LACP evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ovs-lacp-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/ovs-lacp/
+          if-no-files-found: warn
+          retention-days: 7

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('plan','prepare','apply')][string] $Mode = 'plan',
+    [ValidateSet('plan','prepare','apply','lacp-plan','lacp-apply')][string] $Mode = 'plan',
     [string] $ProjectName = 'Switching-Pilot-OVS',
     [string] $ApiBaseUrl = 'http://127.0.0.1:3076',
     [string] $EvidenceDirectory = 'artifacts/ovs-rstp',
@@ -197,7 +197,8 @@ try {
     $missing = @($requiredLinks | Where-Object { -not $seen.ContainsKey($_) })
     if ($missing.Count) { throw "Missing pilot cables: $($missing -join ', ')." }
     $result.second_trunk_connected = $seen.ContainsKey($secondTrunk)
-    if ($Mode -eq 'plan') {
+    if ($Mode -like 'lacp-*' -and -not $result.second_trunk_connected) { throw 'LACP requires both inter-switch cables.' }
+    if ($Mode -in 'plan','lacp-plan') {
         Write-Output "OVS pilot wiring passed. Second trunk connected: $($result.second_trunk_connected)."
         $result.passed = $true
         return
@@ -224,12 +225,19 @@ try {
         }
     }
     foreach ($name in $left,$right) {
-        Assert-OvsPort $name 'eth0' 'trunk[][10,30,99]'
+        if ($Mode -ne 'lacp-apply') { Assert-OvsPort $name 'eth0' 'trunk[][10,30,99]' }
         Assert-OvsPort $name 'eth2' 'access10[]'
     }
     Assert-OvsPort $right 'eth3' 'access30[]'
     Assert-ClientAddress 'Client-A' '192.168.10.11'
     Assert-ClientAddress 'Client-B' '192.168.10.12'
+
+    if ($Mode -eq 'lacp-apply') {
+        . (Join-Path $PSScriptRoot 'OvsLacp.ps1')
+        Invoke-LacpPilot
+        $result.passed = $true
+        return
+    }
 
     if ($Mode -eq 'prepare') {
         Assert-ClientPings 'single-trunk baseline'
