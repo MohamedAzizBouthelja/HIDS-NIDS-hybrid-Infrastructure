@@ -73,7 +73,7 @@ function Test-IosNvramSaveConfirmation([string] $Text, [string] $ExpectedEcho, [
         (Test-IosCommandEcho $Text $ExpectedEcho))
 }
 
-function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutSeconds = 30, [switch] $AllowInitialReturn) {
+function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutSeconds = 30, [switch] $AllowInitialReturn, [switch] $Vpcs) {
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
     $quietTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $buffer = [byte[]]::new(8192)
@@ -95,6 +95,17 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
         # Terminal private-mode sequences such as ESC[?2004h, window titles,
         # and bells can sit beside a visible VPCS prompt.
         $plain = $text.ToString() -replace '\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x07', ''
+        if ($Vpcs) {
+            # VPCS can indent its prompt and include terminal framing bytes.
+            # Require a complete prompt on the final line before accepting it.
+            $vpcsText = $plain -replace '[^\x20-\x7e\r\n\t]', ''
+            $vpcsPrompt = [regex]::Match($vpcsText.TrimEnd(), '(?:^|[\r\n])[ \t]*([A-Za-z0-9_.:-]+(?:\[\d+\])?>)\z')
+            if ($vpcsPrompt.Success -and $quietTimer.ElapsedMilliseconds -ge 100 -and
+                (Test-IosCommandEcho $vpcsText $ExpectedEcho)) {
+                $Session.Prompt = $vpcsPrompt.Groups[1].Value
+                return $vpcsText
+            }
+        }
         $terminal = Get-IosTerminalState $plain
         if ($terminal.Kind -eq 'confirmation' -and $quietTimer.ElapsedMilliseconds -ge 500) {
             $offset = $plain.LastIndexOf($terminal.Detail, [System.StringComparison]::Ordinal)
@@ -130,12 +141,18 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
             }
             throw "IOS is currently waiting at '$($terminal.Detail)'. Prepare this console manually; no credentials or setup answers were sent."
         }
-        if ($terminal.Kind -eq 'prompt' -and $quietTimer.ElapsedMilliseconds -ge 100 -and
+        if (-not $Vpcs -and $terminal.Kind -eq 'prompt' -and $quietTimer.ElapsedMilliseconds -ge 100 -and
             (Test-IosCommandEcho $plain $ExpectedEcho)) {
             $Session.Prompt = $terminal.Prompt
             return $plain
         }
         Start-Sleep -Milliseconds 25
+    }
+    if ($Vpcs) {
+        $tail = $text.ToString([Math]::Max(0, $text.Length - 256), [Math]::Min(256, $text.Length))
+        $escaped = ConvertTo-Json -InputObject $tail -Compress
+        $bytes = ($tail.ToCharArray() | ForEach-Object { '{0:X2}' -f [int]$_ }) -join ' '
+        throw "Timed out waiting for a VPCS prompt. Console tail: $escaped. Tail bytes: $bytes"
     }
     throw "Timed out waiting for an IOS prompt after '$ExpectedEcho'. Last output: $($text.ToString())"
 }
@@ -179,7 +196,7 @@ function Open-IosConsole([string] $Address, [int] $Port, [switch] $Vpcs, [switch
     $session = Open-Gns3Telnet $Address $Port
     try {
         $session.Stream.Write([byte[]]@(13), 0, 1)
-        $null = Read-IosResponse $session -AllowInitialReturn
+        $null = Read-IosResponse $session -AllowInitialReturn:(-not $Vpcs) -Vpcs:$Vpcs
         if ($Vpcs) {
             if (-not $session.Prompt.EndsWith('>')) { throw 'Expected a VPCS console prompt.' }
             return $session

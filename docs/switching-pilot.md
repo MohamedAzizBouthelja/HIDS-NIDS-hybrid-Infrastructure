@@ -245,6 +245,9 @@ ovs-vsctl --columns=name,vlan_mode,tag,trunks list Port
 
 Once the VLAN test passes, open the isolated project in GNS3 on the runner
 side. Start the switches and clients and close their manual consoles.
+If the project has a different name, copy its exact name from GNS3 into
+the workflow's **project_name** field. The workflow expects a project
+containing both OVS appliances, Client-A, Client-B and Test-C.
 Run **GNS3 Open vSwitch RSTP** with the following modes in sequence.
 
 1. **plan** checks the five nodes and the cable map using the GNS3 API.

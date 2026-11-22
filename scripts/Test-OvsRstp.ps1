@@ -55,7 +55,7 @@ function Invoke-VpcsPing([string] $Node, [string] $Destination, [int] $Count) {
     $bytes = [Text.Encoding]::ASCII.GetBytes("$command" + [char]13)
     $session = $sessions[$Node]
     $session.Stream.Write($bytes, 0, $bytes.Length)
-    $output = Read-IosResponse $session -TimeoutSeconds 12
+    $output = Read-IosResponse $session -TimeoutSeconds 12 -Vpcs
     Record-Command $Node $command $output
     $pattern = '(?im)^\s*\d+ bytes from ' + [regex]::Escape($Destination) + ' icmp_seq=(\d+)\s+ttl=\d+'
     return @([regex]::Matches($output, $pattern) | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique).Count
@@ -139,8 +139,19 @@ function Restore-Uplink {
 }
 
 try {
-    $project = @(Read-Gns3 '/v2/projects' | Where-Object { $_.name -ceq $ProjectName })
-    if ($project.Count -ne 1 -or $project[0].status -ne 'opened') { throw "Open the isolated '$ProjectName' project in GNS3." }
+    $projects = @(Read-Gns3 '/v2/projects')
+    $project = @($projects | Where-Object { $_.name -ceq $ProjectName })
+    if ($project.Count -eq 0) {
+        $openedNames = @($projects | Where-Object { $_.status -eq 'opened' } | ForEach-Object { $_.name })
+        $opened = if ($openedNames.Count) { $openedNames -join ', ' } else { '(none)' }
+        throw "Project '$ProjectName' was not found on the runner's controller. Open the OVS pilot in GNS3 and enter its exact name in project_name. Currently open: $opened"
+    }
+    if ($project.Count -gt 1) {
+        throw "More than one project is named '$ProjectName'. Give the OVS pilot a unique name and enter it in project_name."
+    }
+    if ($project[0].status -ne 'opened') {
+        throw "Project '$ProjectName' exists but is $($project[0].status). Open it in GNS3 on the runner PC and start a new plan run."
+    }
     $result.project_id = ([guid]$project[0].project_id).ToString()
     $projectPath = "/v2/projects/$($result.project_id)"
     $nodeNames = @{}
@@ -190,7 +201,10 @@ try {
             $sessions[$name] = Open-OvsConsole $node.console_host $node.console $name
             if ((Invoke-Ovs $name 'ovs-vsctl --version') -notmatch 'ovs-vsctl \(Open vSwitch\)') { throw "$name is not an OVS console." }
         }
-        else { $sessions[$name] = Open-IosConsole $node.console_host $node.console -Vpcs }
+        else {
+            try { $sessions[$name] = Open-IosConsole $node.console_host $node.console -Vpcs }
+            catch { throw "Could not open $name console. $($_.Exception.Message)" }
+        }
     }
     foreach ($name in $left,$right) {
         Assert-OvsPort $name 'eth0' 'trunk[][10,30,99]'

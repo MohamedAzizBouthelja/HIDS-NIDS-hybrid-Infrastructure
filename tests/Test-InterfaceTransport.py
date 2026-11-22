@@ -455,7 +455,7 @@ def check_live_challenges():
 
 
 def check_vpcs_console_prompt():
-    """Private terminal modes and titles cannot obscure VPCS prompts."""
+    """Private terminal modes, indentation and framing cannot obscure VPCS prompts."""
     received = bytearray()
 
     class VpcsHandler(socketserver.BaseRequestHandler):
@@ -473,7 +473,7 @@ def check_vpcs_console_prompt():
                     else:
                         self.request.sendall(b"\r\n84 bytes from 192.168.10.12 icmp_seq=1 ttl=64 time=1 ms\r\n\x1b[?")
                     time.sleep(0.05)
-                    self.request.sendall(b"2004h\x1b]0;VPCS\x07VPCS> \x07")
+                    self.request.sendall(b"2004h\x1b]0;VPCS\x07\t \xa0VPCS> \x07\x9c")
 
     with ConsoleServer(("127.0.0.1", 0), VpcsHandler) as server:
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -485,7 +485,7 @@ def check_vpcs_console_prompt():
             "if ($session.Prompt -cne 'VPCS>') { throw 'Wrong VPCS prompt' }; "
             "$bytes=[Text.Encoding]::ASCII.GetBytes(('ping 192.168.10.12 -c 1' + [char]13)); "
             "$session.Stream.Write($bytes,0,$bytes.Length); "
-            "$reply=Read-IosResponse $session -TimeoutSeconds 2; "
+            "$reply=Read-IosResponse $session -TimeoutSeconds 2 -Vpcs; "
             "if ($reply -notmatch 'icmp_seq=1') { throw 'Missing VPCS ping result' } "
             "} finally { Close-IosConsole $session }"
         )
