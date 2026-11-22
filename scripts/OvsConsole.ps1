@@ -9,7 +9,9 @@ function Read-OvsConsole($Session, [string] $Pattern) {
             if ($count -eq 0) { throw 'OVS console disconnected.' }
             [void]$text.Append((ConvertFrom-IosTelnet $Session $buffer[0..($count - 1)]))
             if ($text.Length -gt 65536) { throw 'OVS console response exceeded 64 KiB.' }
-            $clean = $text.ToString() -replace '\x1b\[[0-?]*[ -/]*[@-~]', ''
+            # The Docker PTY can add another CR to Telnet line endings.
+            # Strip terminal control codes and use LF for all framing.
+            $clean = ($text.ToString() -replace '\x1b\[[0-?]*[ -/]*[@-~]', '') -replace '\r+\n|\r+', "`n"
             $match = [regex]::Match($clean, $Pattern)
             if ($match.Success) { return $match }
         }
@@ -25,8 +27,8 @@ function Open-OvsConsole([string] $Address, [int] $Port, [string] $NodeName) {
     $session = Open-Gns3Telnet $Address $Port
     try {
         $session.Stream.Write([byte[]]@(13), 0, 1)
-        $prompt = '(?m)^' + [regex]::Escape($NodeName) + ':/#[ \t]*\r?$'
-        $null = Read-OvsConsole $session $prompt
+        $prompt = '^' + [regex]::Escape($NodeName) + ':/#[ \t]*$'
+        $null = Read-OvsConsole $session "(?m)$prompt"
         $session | Add-Member -NotePropertyName OvsPrompt -NotePropertyValue $prompt
         return $session
     }
@@ -42,7 +44,7 @@ function Send-OvsCommand($Session, [string] $Command) {
     $line = 'echo {0}; {1}; rc=$?; echo; echo {2}:$rc' -f $start, $Command, $end
     $bytes = [Text.Encoding]::ASCII.GetBytes("$line" + [char]13)
     $Session.Stream.Write($bytes, 0, $bytes.Length)
-    $pattern = "(?m)^$start\r?\n(?s:(?<output>.*?))^$end" + ':(?<status>\d+)\r?\n' + $Session.OvsPrompt.Substring(4)
+    $pattern = "(?m)^$start\n(?s:(?<output>.*?))^$end" + ':(?<status>\d+)\n' + $Session.OvsPrompt
     $reply = Read-OvsConsole $Session $pattern
     $output = $reply.Groups['output'].Value.Trim()
     if ($reply.Groups['status'].Value -ne '0') { throw "OVS command failed ($Command): $output" }
