@@ -73,7 +73,7 @@ function Test-IosNvramSaveConfirmation([string] $Text, [string] $ExpectedEcho, [
         (Test-IosCommandEcho $Text $ExpectedEcho))
 }
 
-function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutSeconds = 30, [switch] $AllowInitialReturn, [switch] $Vpcs) {
+function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutSeconds = 30, [switch] $AllowInitialReturn, [switch] $Vpcs, [string] $VpcsOutputPattern) {
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
     $quietTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $buffer = [byte[]]::new(8192)
@@ -110,7 +110,8 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
             $vpcsPrompt = [regex]::Match($vpcsText.TrimEnd(), '(?:^|[\r\n])[ \t]*([A-Za-z0-9_.:-]+(?:\[\d+\])?>)\z')
             $vpcsPromptMatched = $vpcsPrompt.Success
             if ($vpcsPromptMatched -and $quietTimer.ElapsedMilliseconds -ge 100 -and
-                (Test-IosCommandEcho $vpcsText $ExpectedEcho)) {
+                (Test-IosCommandEcho $vpcsText $ExpectedEcho) -and
+                (-not $VpcsOutputPattern -or $vpcsText -match $VpcsOutputPattern)) {
                 $Session.Prompt = $vpcsPrompt.Groups[1].Value
                 return $vpcsText
             }
@@ -161,7 +162,8 @@ function Read-IosResponse($Session, [string] $ExpectedEcho = '', [int] $TimeoutS
         $tail = $text.ToString([Math]::Max(0, $text.Length - 256), [Math]::Min(256, $text.Length))
         $escaped = ConvertTo-Json -InputObject $tail -Compress
         $bytes = ($tail.ToCharArray() | ForEach-Object { '{0:X2}' -f [int]$_ }) -join ' '
-        throw "Timed out waiting for a VPCS prompt. Prompt matched: $vpcsPromptMatched. Visible quiet time: $($quietTimer.ElapsedMilliseconds) ms. Console tail: $escaped. Tail bytes: $bytes"
+        $waitingFor = if ($VpcsOutputPattern) { 'VPCS command output and prompt' } else { 'a VPCS prompt' }
+        throw "Timed out waiting for $waitingFor. Prompt matched: $vpcsPromptMatched. Visible quiet time: $($quietTimer.ElapsedMilliseconds) ms. Console tail: $escaped. Tail bytes: $bytes"
     }
     throw "Timed out waiting for an IOS prompt after '$ExpectedEcho'. Last output: $($text.ToString())"
 }

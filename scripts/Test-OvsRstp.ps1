@@ -50,22 +50,39 @@ function Invoke-Ovs([string] $Node, [string] $Command) {
     return $output
 }
 
-function Invoke-VpcsPing([string] $Node, [string] $Destination, [int] $Count) {
-    $command = "ping $Destination -c $Count"
-    $bytes = [Text.Encoding]::ASCII.GetBytes("$command" + [char]13)
+function Invoke-VpcsCommand([string] $Node, [string] $Command, [string] $OutputPattern) {
+    $bytes = [Text.Encoding]::ASCII.GetBytes("$Command" + [char]13)
     $session = $sessions[$Node]
     $session.Stream.Write($bytes, 0, $bytes.Length)
-    $output = Read-IosResponse $session -TimeoutSeconds 12 -Vpcs
-    Record-Command $Node $command $output
+    try { $output = Read-IosResponse $session -TimeoutSeconds 12 -Vpcs -VpcsOutputPattern $OutputPattern }
+    catch {
+        Record-Command $Node $Command $_.Exception.Message
+        throw "$Node failed to complete '$Command'. $($_.Exception.Message)"
+    }
+    Record-Command $Node $Command $output
+    return ($output -replace '\r+\n|\r+', "`n")
+}
+
+function Assert-ClientAddress([string] $Node, [string] $Address) {
+    $output = Invoke-VpcsCommand $Node 'show ip' '(?i)IP/MASK[ \t]*:'
+    $expected = '(?im)^[ \t]*IP/MASK[ \t]*:[ \t]*' + [regex]::Escape("$Address/24") + '[ \t]*$'
+    if ($output -notmatch $expected) { throw "$Node must use $Address/24. VPCS show ip output: $output" }
+}
+
+function Invoke-VpcsPing([string] $Node, [string] $Destination, [int] $Count) {
+    $output = Invoke-VpcsCommand $Node "ping $Destination -c $Count" '(?i)icmp_seq=|not reachable|no gateway found|timed? out|timeout|invalid options|unknown command|cannot resolve|unreachable'
     $pattern = '(?im)^\s*\d+ bytes from ' + [regex]::Escape($Destination) + ' icmp_seq=(\d+)\s+ttl=\d+'
-    return @([regex]::Matches($output, $pattern) | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique).Count
+    $replies = @([regex]::Matches($output, $pattern) | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique).Count
+    return @{ replies = $replies; output = $output }
 }
 
 function Assert-ClientPings([string] $Phase) {
     foreach ($probe in @(@{ node = 'Client-A'; ip = '192.168.10.12' }, @{ node = 'Client-B'; ip = '192.168.10.11' })) {
         $null = Invoke-VpcsPing $probe.node $probe.ip 1
-        $count = Invoke-VpcsPing $probe.node $probe.ip 3
-        if ($count -ne 3) { throw "$Phase VLAN 10 ping from $($probe.node) failed ($count/3)." }
+        $ping = Invoke-VpcsPing $probe.node $probe.ip 3
+        if ($ping.replies -ne 3) {
+            throw "$Phase VLAN 10 ping from $($probe.node) to $($probe.ip) failed ($($ping.replies)/3). VPCS output: $($ping.output)"
+        }
     }
     Write-Output "PASS: $Phase VLAN 10 pings 3/3 in both directions."
 }
@@ -211,6 +228,8 @@ try {
         Assert-OvsPort $name 'eth2' 'access10[]'
     }
     Assert-OvsPort $right 'eth3' 'access30[]'
+    Assert-ClientAddress 'Client-A' '192.168.10.11'
+    Assert-ClientAddress 'Client-B' '192.168.10.12'
 
     if ($Mode -eq 'prepare') {
         Assert-ClientPings 'single-trunk baseline'
