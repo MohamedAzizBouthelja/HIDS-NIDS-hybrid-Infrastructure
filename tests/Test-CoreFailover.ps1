@@ -4,8 +4,42 @@ $ErrorActionPreference = 'Stop'
 $manifestPath = Join-Path $PSScriptRoot '../gns3/core-topology.json'
 $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ('failover-' + [guid]::NewGuid())
 function Assert-Failover($Condition, $Message) { if (-not $Condition) { throw "TEST FAILED: $Message" } }
-function Invoke-CoreInterfaceConfiguration { }
-function Invoke-RestMethod { return @([pscustomobject]@{ name='R1'; console_host='127.0.0.1'; console=5001 }, [pscustomobject]@{ name='R2'; console_host='127.0.0.1'; console=5002 }, [pscustomobject]@{ name='R4'; console_host='127.0.0.1'; console=5004 }) }
+$integrationId = 'ead82e9a-4437-40d9-93fd-db593ba0c650'
+function Invoke-CoreInterfaceConfiguration {
+    if ($global:FailoverMock.integration) { throw 'Core manifest validation was called for integration' }
+}
+function Invoke-RestMethod($Uri) {
+    if ($global:FailoverMock.integration) {
+        if ($Uri -like '*/v2/projects') {
+            return @(
+                @{ name='Hybrid-Core-Lab'; project_id='cf3df97c-53f6-4ab7-a3d3-980d0fc96de7'; status='opened' }
+                @{ name='Hybrid-Core-Integration'; project_id=$integrationId; status='opened' }
+            )
+        }
+        if ($Uri -eq "http://127.0.0.1:3076/v2/projects/$integrationId/links") { return @('integration links') }
+        Assert-Failover ($Uri -eq "http://127.0.0.1:3076/v2/projects/$integrationId/nodes") 'Nodes belong to selected project'
+    }
+    $port = 5000
+    foreach ($name in 'R1','R2','R3','R4','HTTP-CLIENT','API-A-1') {
+        [pscustomobject]@{name=$name; project_id=$integrationId; console_type='telnet'; console_host='127.0.0.1'; console=(++$port)}
+    }
+}
+function Get-IntegrationInventory($Core, $Nodes, $Links) {
+    Assert-Failover ($Links -eq 'integration links') 'Integration cables are validated'
+    $byName = @{}
+    foreach ($node in $Nodes) { $byName[$node.name] = $node }
+    return @{ Nodes=$byName }
+}
+function Start-FailoverHttp($Node, $Directory) {
+    Assert-Failover ($Node.name -eq 'HTTP-CLIENT') 'HTTP probe uses VLAN 10 client'
+    return @{ active=$true }
+}
+function Wait-FailoverHttp($Probe, $Phase) {
+    Assert-Failover $Probe.active 'HTTP sampling stays active'
+    $global:FailoverMock.httpPhases += $Phase
+    if ($global:FailoverMock.scenario -eq 'integration-http-fail' -and $Phase -eq 'backup') { throw 'Mock API unavailable' }
+}
+function Stop-FailoverHttp($Probe) { $global:FailoverMock.httpStopped = $true }
 function Open-IosConsole($Address, $Port) {
     $global:FailoverMock.opens++
     $name = switch ($Port) { 5001 { 'R1' } 5002 { 'R2' } 5004 { 'R4' } default { throw 'Unexpected console' } }
@@ -131,19 +165,20 @@ function Send-IosCommand($Session, $Command) {
     }
 }
 function Test-PrimaryLinkScenarios($primaryLink) {
-    foreach ($scenario in @('plan','success','measure','measure-console-failure','trace-success','trace-error','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure','direct-plan','direct-success','direct-preflight-failure','direct-lost-ack','direct-wrong-path','direct-secondary-restore-failure')) {
-        $global:FailoverMock = @{ scenario=$scenario; primaryLink=$primaryLink; down=$false; cuts=0; restores=0; opens=0; closes=0; invalidEnds=0; backupReads=0; restoreFailed=$false; commands=[Collections.Generic.List[string]]::new() }
+    foreach ($scenario in @('plan','success','measure','measure-console-failure','trace-success','trace-error','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure','direct-plan','direct-success','direct-preflight-failure','direct-lost-ack','direct-wrong-path','direct-secondary-restore-failure','integration-plan','integration-success','integration-http-fail')) {
+        $global:FailoverMock = @{ scenario=$scenario; integration=($scenario -like 'integration-*'); httpPhases=@(); primaryLink=$primaryLink; down=$false; cuts=0; restores=0; opens=0; closes=0; invalidEnds=0; backupReads=0; restoreFailed=$false; commands=[Collections.Generic.List[string]]::new() }
         $directory = Join-Path $testDirectory "$primaryLink-$scenario"
-        $isPlan = $scenario -in @('plan','direct-plan')
+        $isPlan = $scenario -in @('plan','direct-plan','integration-plan')
         $mode = if ($isPlan) { 'plan' } else { 'apply' }
         $failed = $false
         $capture = $scenario -in @('plan','trace-success','trace-error')
         $measure = $scenario -in @('measure','measure-console-failure','lost-shutdown-ack')
         $direct = $scenario -like 'direct-*'
-        try { $planOutput = Invoke-CoreFailover -PrimaryLink $primaryLink -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 -CaptureTraceroute:$capture -MeasureLoss:$measure -TestDirectBackup:$direct }
+        $projectName = if ($global:FailoverMock.integration) { 'Hybrid-Core-Integration' } else { 'Hybrid-Core-Lab' }
+        try { $planOutput = Invoke-CoreFailover -ProjectName $projectName -PrimaryLink $primaryLink -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 -CaptureTraceroute:$capture -MeasureLoss:$measure -TestDirectBackup:$direct }
         catch { $failed = $true }
         $state = $global:FailoverMock
-        $expectedSuccess = $scenario -in @('success','measure','trace-success','delayed-backup','retry-restore','direct-success')
+        $expectedSuccess = $scenario -in @('success','measure','trace-success','delayed-backup','retry-restore','direct-success','integration-success')
         Assert-Failover ($failed -eq (-not ($expectedSuccess -or $isPlan))) "$scenario status"
         Assert-Failover (-not $state.probePhase) "$scenario releases the probe console"
         Assert-Failover ($state.closes -eq $state.opens) "$scenario closes all sessions"
@@ -159,6 +194,10 @@ function Test-PrimaryLinkScenarios($primaryLink) {
         else {
             $evidence = Get-Content (Join-Path $directory 'result.json') -Raw | ConvertFrom-Json
             Assert-Failover ($evidence.passed -eq $expectedSuccess) "$scenario evidence accurately reports status"
+            if ($state.integration) {
+                Assert-Failover ($evidence.project_id -eq $integrationId -and $evidence.project -eq $projectName -and $state.httpStopped) 'Integration evidence and sampler cleanup'
+                if ($expectedSuccess) { Assert-Failover (($state.httpPhases -join ',') -eq 'baseline,backup,recovery') 'HTTP passes before, during and after the cut' }
+            }
             if ($scenario -eq 'measure') {
                 Assert-Failover ($evidence.backup_probes.phase -eq 'backup' -and $evidence.recovery_probes.phase -eq 'recovery') 'Both probe summaries are archived'
             }

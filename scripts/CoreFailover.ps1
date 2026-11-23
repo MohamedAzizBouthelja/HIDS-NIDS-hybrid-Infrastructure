@@ -10,14 +10,44 @@ function Invoke-CoreFailover {
         [switch] $TestDirectBackup,
         [ValidateRange(1,120)][int] $Attempts = 40,
         [ValidateRange(0,10)][int] $PollSeconds = 2,
-        [ValidateSet('R1-R2','R2-R4')][string] $PrimaryLink = 'R1-R2'
+        [ValidateSet('R1-R2','R2-R4')][string] $PrimaryLink = 'R1-R2',
+        [ValidateSet('Hybrid-Core-Lab','Hybrid-Core-Integration')][string] $ProjectName = 'Hybrid-Core-Lab'
     )
     $ErrorActionPreference = 'Stop'
-    # Validate the dedicated project, running nodes, cables and console endpoints.
-    Invoke-CoreInterfaceConfiguration -Mode plan -ApiBaseUrl $ApiBaseUrl -ManifestPath $ManifestPath | Out-Null
     $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    $response = Invoke-RestMethod -Uri "$($ApiBaseUrl.TrimEnd('/'))/v2/projects/$($manifest.project.project_id)/nodes" -Method Get -TimeoutSec 15
-    $nodes = @($response | ForEach-Object { $_ })
+    $base = "$($ApiBaseUrl.TrimEnd('/'))/v2/projects"
+    $projectId = $manifest.project.project_id
+    $integration = $ProjectName -eq 'Hybrid-Core-Integration'
+    if ($integration) {
+        $projects = Invoke-RestMethod -Uri $base -Method Get -TimeoutSec 15
+        $selected = @($projects | Where-Object { $_.name -ceq $ProjectName -and $_.status -eq 'opened' })
+        if ($selected.Count -ne 1 -or $selected[0].project_id -eq $projectId) {
+            throw "Open the distinct $ProjectName project on the runner's GNS3 controller."
+        }
+        $projectId = [guid]$selected[0].project_id
+    }
+    else {
+        Invoke-CoreInterfaceConfiguration -Mode plan -ApiBaseUrl $ApiBaseUrl -ManifestPath $ManifestPath | Out-Null
+    }
+    $nodes = Invoke-RestMethod -Uri "$base/$projectId/nodes" -Method Get -TimeoutSec 15
+    if ($integration) {
+        $links = Invoke-RestMethod -Uri "$base/$projectId/links" -Method Get -TimeoutSec 15
+        $inventory = Get-IntegrationInventory $manifest $nodes $links
+        if (-not $inventory.Nodes['HTTP-CLIENT'] -or -not ($inventory.Nodes['API-A'] -or $inventory.Nodes['API-A-1'])) {
+            throw 'Integration failover requires the VLAN 10 HTTP-CLIENT and VLAN 20 API endpoint.'
+        }
+        $endpoints = @{}
+        foreach ($name in 'R1','R2','R3','R4','HTTP-CLIENT') {
+            $node = $inventory.Nodes[$name]
+            $endpoint = "$($node.console_host):$($node.console)"
+            if ($node.project_id -ne $projectId -or $node.console_type -ne 'telnet' -or
+                -not $node.console_host -or $node.console_host -eq '0.0.0.0' -or ($node.console -lt 1 -or $node.console -gt 65535) -or $endpoints.ContainsKey($endpoint)) {
+                throw "Invalid project or console endpoint for $name."
+            }
+            $endpoints[$endpoint] = $true
+        }
+    }
+    Write-Output "Selected project: $ProjectName ($projectId)"
     $primary = [ordered]@{ router = 'R1'; interface = 'FastEthernet0/0'; address = '10.0.12.1'; shutdown_attempted = $false; restored = $false; restore_command_utc = @() }
     if ($PrimaryLink -eq 'R2-R4') {
         $primary.router = 'R2'
@@ -30,6 +60,7 @@ function Invoke-CoreFailover {
         $plan += 'shut R1 FastEthernet1/0 and verify direct R1-R4; restore R1 FastEthernet1/0 and verify R1-R3-R4; '
     }
     $plan += "restore $target and verify R1-R2-R4. No startup save."
+    if ($integration) { $plan += " Sample /health from HTTP-CLIENT throughout the run." }
     Write-Output $plan
     if ($CaptureTraceroute) { Write-Output 'Traceroute capture enabled in both directions at every route checkpoint; maximum TTL 4.' }
     if ($MeasureLoss) { Write-Output 'R4 will probe the R1 loopback around the primary link shutdown and restoration, then path checks will run.' }
@@ -47,6 +78,9 @@ function Invoke-CoreFailover {
     $result.capture_traceroute = [bool]$CaptureTraceroute
     $result.measure_loss = [bool]$MeasureLoss
     $result.test_direct_backup = [bool]$TestDirectBackup
+    $result.project = $ProjectName
+    $result.project_id = [string]$projectId
+    $httpProbe = $null
     $result.primary_link = $PrimaryLink
     $secondary = [ordered]@{ router = 'R1'; interface = 'FastEthernet1/0'; address = '10.0.13.1'; shutdown_attempted = $false; restored = $false; restore_command_utc = @() }
     $result.links = [ordered]@{ primary = $primary }
@@ -98,6 +132,7 @@ function Invoke-CoreFailover {
                         Save-FailoverEvidence
                     }
                 }
+                if ($httpProbe) { Wait-FailoverHttp $httpProbe $Phase }
                 Write-Output "PASS: $Phase unique next hops and bidirectional loopback pings."
                 return
             }
@@ -202,6 +237,9 @@ function Invoke-CoreFailover {
                 throw 'Direct R1–R4 link must be up/up at both endpoints before the test.'
             }
         }
+        if ($integration) {
+            $httpProbe = Start-FailoverHttp $inventory.Nodes['HTTP-CLIENT'] $EvidenceDirectory
+        }
         Wait-FailoverPath baseline primary
         if ($MeasureLoss) { $probe = Start-FailoverProbes $sessions.R4 $EvidenceDirectory 'backup' }
         try {
@@ -236,6 +274,9 @@ function Invoke-CoreFailover {
             $result.recovery_probes = Get-FailoverProbeSummary $completedProbe.output_path $result.restore_command_utc[0]
         }
         Wait-FailoverPath recovery primary
+        if ($httpProbe) {
+            try { Stop-FailoverHttp $httpProbe } finally { $httpProbe = $null }
+        }
         $result.passed = $true
     }
     catch {
@@ -254,6 +295,9 @@ function Invoke-CoreFailover {
                         }
                     }
                 }
+            }
+            if ($httpProbe) {
+                try { Stop-FailoverHttp $httpProbe } catch { Write-Warning $_.Exception.Message }
             }
             if ($null -ne $probe) {
                 try { Stop-FailoverProbes $probe } catch { Write-Warning "R4 probe cleanup reported: $($_.Exception.Message)" }

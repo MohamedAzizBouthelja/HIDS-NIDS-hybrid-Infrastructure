@@ -7,6 +7,23 @@ function Get-IntegrationInventory($core, $NodeList, $LinkList) {
         $types['MON-GW'] = 'qemu'
         $types['NAT-1'] = 'nat'
     }
+    $endpointLayout = @{
+        'API-A'       = @('docker', 'SW-SERVER:3')
+        'API-A-1'     = @('docker', 'SW-SERVER:3')
+        'HTTP-CLIENT' = @('docker', 'SW-CLIENT:3')
+        'TEST-CLIENT' = @('docker', 'SW-CLIENT:5')
+        'MGMT-PC'     = @('vpcs', 'SW-CLIENT:6')
+        'SEC-PC'      = @('vpcs', 'SW-SERVER:5')
+    }
+    if ($NodeList.name -contains 'API-A' -and $NodeList.name -contains 'API-A-1') {
+        throw 'Only one API node can occupy SW-SERVER eth3.'
+    }
+    $endpointCables = @(foreach ($name in $endpointLayout.Keys) {
+        if ($NodeList.name -contains $name) {
+            $types[$name] = $endpointLayout[$name][0]
+            Get-CableKey "${name}:0" $endpointLayout[$name][1]
+        }
+    })
     $nodes = @{}
     $names = @{}
     foreach ($n in $NodeList) {
@@ -22,6 +39,7 @@ function Get-IntegrationInventory($core, $NodeList, $LinkList) {
     if ($extended) {
         $expected += @('MON-GW:0|NAT-1:0','MON-GW:1|R4:3')
     }
+    $expected += $endpointCables
     $actual = @(foreach ($link in $LinkList) {
         if ($link.nodes.Count -ne 2 -or $link.link_type -ne 'ethernet' -or $link.suspend -or @($link.filters.PSObject.Properties).Count -gt 0) { throw 'Unexpected or impaired cable.' }
         $ends = @(foreach ($e in $link.nodes) {

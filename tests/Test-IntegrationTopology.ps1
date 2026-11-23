@@ -33,6 +33,23 @@ $gatewayNodes = $nodes + (New-TestNode 'MON-GW' 'qemu')
 $extendedNodes = $gatewayNodes + (New-TestNode 'NAT-1' 'nat')
 $extendedLinks = $links + (New-TestLink 'R4' 3 'MON-GW' 1) + (New-TestLink 'MON-GW' 0 'NAT-1' 0)
 if (!(Get-IntegrationInventory $core $extendedNodes $extendedLinks).Extended) { throw 'Extension misclassified.' }
+$apiNodes = $extendedNodes + (New-TestNode 'API-A' 'docker')
+$apiLinks = $extendedLinks + (New-TestLink 'SW-SERVER' 3 'API-A' 0)
+$null = Get-IntegrationInventory $core $apiNodes $apiLinks
+Assert-Rejected $apiNodes $extendedLinks 'missing API cable'
+Assert-Rejected $apiNodes ($extendedLinks + (New-TestLink 'API-A' 0 'SW-SERVER' 4)) 'API on trunk'
+$httpNodes = $apiNodes + (New-TestNode 'HTTP-CLIENT' 'docker')
+$httpLink = New-TestLink 'HTTP-CLIENT' 0 'SW-CLIENT' 3
+$null = Get-IntegrationInventory $core $httpNodes ($apiLinks + $httpLink)
+Assert-Rejected $httpNodes $apiLinks 'missing HTTP client cable'
+Assert-Rejected $httpNodes ($apiLinks + (New-TestLink 'HTTP-CLIENT' 0 'SW-SERVER' 3)) 'HTTP client on server switch'
+$vlanNodes = $httpNodes + (New-TestNode 'TEST-CLIENT' 'docker') + (New-TestNode 'MGMT-PC' 'vpcs') + (New-TestNode 'SEC-PC' 'vpcs')
+$vlanLinks = $apiLinks + $httpLink + (New-TestLink 'TEST-CLIENT' 0 'SW-CLIENT' 5) + (New-TestLink 'MGMT-PC' 0 'SW-CLIENT' 6) + (New-TestLink 'SEC-PC' 0 'SW-SERVER' 5)
+$null = Get-IntegrationInventory $core $vlanNodes $vlanLinks
+Assert-Rejected $vlanNodes ($vlanLinks[0..($vlanLinks.Count - 2)]) 'missing security cable'
+$apiNodes[-1].name = 'API-A-1'
+$null = Get-IntegrationInventory $core $vlanNodes $vlanLinks
+Assert-Rejected ($vlanNodes + (New-TestNode 'API-A' 'docker')) $vlanLinks 'ambiguous API node'
 Assert-Rejected $gatewayNodes $links 'missing NAT'
 foreach ($missing in 0..10) {
     $remaining = @(foreach ($i in 0..10) { if ($i -ne $missing) { $extendedLinks[$i] } })

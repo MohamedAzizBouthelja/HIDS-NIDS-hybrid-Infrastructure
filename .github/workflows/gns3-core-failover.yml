@@ -8,6 +8,11 @@ on:
         type: choice
         options: [plan, apply]
         default: plan
+      project_name:
+        description: Open GNS3 project (Integration also measures client HTTP availability)
+        type: choice
+        options: [Hybrid-Core-Lab, Hybrid-Core-Integration]
+        default: Hybrid-Core-Lab
       primary_link:
         description: OSPF primary link to interrupt
         type: choice
@@ -46,15 +51,18 @@ jobs:
         with:
           persist-credentials: false
       - name: Test failover and restoration logic
-        run: ./tests/Test-CoreFailover.ps1
+        run: |
+          ./tests/Test-IntegrationTopology.ps1
+          ./tests/Test-CoreFailover.ps1
       - name: Plan or exercise failover
         env:
+          PROJECT_NAME: ${{ inputs.project_name }}
           PRIMARY_LINK: ${{ inputs.primary_link }}
           FAILOVER_MODE: ${{ inputs.mode }}
           CAPTURE_TRACEROUTE: ${{ inputs.capture_traceroute }}
           MEASURE_LOSS: ${{ inputs.measure_loss }}
           TEST_DIRECT_BACKUP: ${{ inputs.test_direct_backup }}
-        run: ./scripts/Test-CoreFailover.ps1 -Mode $env:FAILOVER_MODE -PrimaryLink $env:PRIMARY_LINK -CaptureTraceroute:($env:CAPTURE_TRACEROUTE -eq 'true') -MeasureLoss:($env:MEASURE_LOSS -eq 'true') -TestDirectBackup:($env:TEST_DIRECT_BACKUP -eq 'true')
+        run: ./scripts/Test-CoreFailover.ps1 -ProjectName $env:PROJECT_NAME -Mode $env:FAILOVER_MODE -PrimaryLink $env:PRIMARY_LINK -CaptureTraceroute:($env:CAPTURE_TRACEROUTE -eq 'true') -MeasureLoss:($env:MEASURE_LOSS -eq 'true') -TestDirectBackup:($env:TEST_DIRECT_BACKUP -eq 'true')
       - name: Save failover evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

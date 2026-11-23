@@ -7,7 +7,8 @@ param(
     [switch] $CaptureTraceroute,
     [switch] $MeasureLoss,
     [switch] $TestDirectBackup,
-    [ValidateSet('R1-R2','R2-R4')][string] $PrimaryLink = 'R1-R2'
+    [ValidateSet('R1-R2','R2-R4')][string] $PrimaryLink = 'R1-R2',
+    [ValidateSet('Hybrid-Core-Lab','Hybrid-Core-Integration')][string] $ProjectName = 'Hybrid-Core-Lab'
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ManifestPath) { $ManifestPath = Join-Path $PSScriptRoot '../gns3/core-topology.json' }
@@ -16,4 +17,6 @@ if (-not $ManifestPath) { $ManifestPath = Join-Path $PSScriptRoot '../gns3/core-
 . (Join-Path $PSScriptRoot 'CoreOspf.ps1')
 . (Join-Path $PSScriptRoot 'CoreFailover.ps1')
 . (Join-Path $PSScriptRoot 'FailoverProbes.ps1')
-Invoke-CoreFailover -PrimaryLink $PrimaryLink -Mode $Mode -ApiBaseUrl $ApiBaseUrl -ManifestPath $ManifestPath -EvidenceDirectory $EvidenceDirectory -CaptureTraceroute:$CaptureTraceroute -MeasureLoss:$MeasureLoss -TestDirectBackup:$TestDirectBackup
+. (Join-Path $PSScriptRoot 'IntegrationTopology.ps1')
+. (Join-Path $PSScriptRoot 'FailoverHttp.ps1')
+Invoke-CoreFailover -ProjectName $ProjectName -PrimaryLink $PrimaryLink -Mode $Mode -ApiBaseUrl $ApiBaseUrl -ManifestPath $ManifestPath -EvidenceDirectory $EvidenceDirectory -CaptureTraceroute:$CaptureTraceroute -MeasureLoss:$MeasureLoss -TestDirectBackup:$TestDirectBackup
