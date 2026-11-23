@@ -15,7 +15,7 @@ function Start-FailoverProbes($Session, [string] $EvidenceDirectory, [string] $P
                 $tick = $clock.ElapsedMilliseconds
                 try {
                     $output = Send-IosCommand $Session $command -TimeoutSeconds 5
-                    if ($Session.Prompt -cne 'R4#' -or $output -notmatch '(?m)^[ \t]*(?:R4#)?ping 10\.255\.0\.1 source 10\.255\.0\.4 repeat 1 timeout 1[ \t]*\r?$' -or
+                    if ($Session.Prompt -cne 'R4#' -or -not (Test-IosProbeEcho $output $command) -or
                         $output -notmatch 'Success rate is (?:100 percent\s*\(1/1\)|0 percent\s*\(0/1\))') {
                         throw "Unexpected R4 console response: $output"
                     }
@@ -56,7 +56,7 @@ function Stop-FailoverProbes($Probe) {
     try {
         $null = $Probe.worker.EndInvoke($Probe.task)
         if ($Probe.state.failure) {
-            throw "R4 $($Probe.phase) sampling aborted after a console error. Close other console clients before retrying. $($Probe.state.failure)"
+            throw "R4 $($Probe.phase) sampling aborted after a console error. $($Probe.state.failure)"
         }
         if ($Probe.worker.HadErrors) { throw ($Probe.worker.Streams.Error[0]) }
     }

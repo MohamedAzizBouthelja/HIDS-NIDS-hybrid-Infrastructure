@@ -66,6 +66,13 @@ function Test-IosCommandEcho([string] $Text, [string] $ExpectedEcho) {
     return $false
 }
 
+function Test-IosProbeEcho([string] $Text, [string] $Command) {
+    # On adjacency recovery IOS can append the entire command to "Loading Done".
+    $adjacency = '(?m)^[ \t]*\*?[A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?: %OSPF-5-ADJCHG: Process \d+, Nbr [\d.]+ on \S+ from LOADING to FULL, Loading Done'
+    $echo = [regex]::Escape($Command)
+    return [regex]::IsMatch(($Text -creplace $adjacency, ''), "(?m)^[ \t]*(?:R4#)?$echo[ \t]*\r?$")
+}
+
 function Test-IosNvramSaveConfirmation([string] $Text, [string] $ExpectedEcho, [string] $Question) {
     return ($ExpectedEcho -ceq 'write memory' -and
         $Question -match '^Overwrite the previous NVRAM configuration\?\s*\[confirm\]$' -and
