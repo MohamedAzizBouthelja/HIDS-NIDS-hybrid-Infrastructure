@@ -9,7 +9,8 @@ function Invoke-CoreFailover {
         [switch] $MeasureLoss,
         [switch] $TestDirectBackup,
         [ValidateRange(1,120)][int] $Attempts = 40,
-        [ValidateRange(0,10)][int] $PollSeconds = 2
+        [ValidateRange(0,10)][int] $PollSeconds = 2,
+        [ValidateSet('R1-R2','R2-R4')][string] $PrimaryLink = 'R1-R2'
     )
     $ErrorActionPreference = 'Stop'
     # Validate the dedicated project, running nodes, cables and console endpoints.
@@ -17,10 +18,18 @@ function Invoke-CoreFailover {
     $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
     $response = Invoke-RestMethod -Uri "$($ApiBaseUrl.TrimEnd('/'))/v2/projects/$($manifest.project.project_id)/nodes" -Method Get -TimeoutSec 15
     $nodes = @($response | ForEach-Object { $_ })
-    $plan = 'Temporarily shutdown R1 FastEthernet0/0; verify R1-R3-R4 in both directions; no shutdown; verify R1-R2-R4. No startup save.'
-    if ($TestDirectBackup) {
-        $plan = 'Verify R1-R2-R4; shut R1 FastEthernet0/0 and verify R1-R3-R4; shut R1 FastEthernet1/0 and verify direct R1-R4; restore FastEthernet1/0 and verify R1-R3-R4; restore FastEthernet0/0 and verify R1-R2-R4. No startup save.'
+    $primary = [ordered]@{ router = 'R1'; interface = 'FastEthernet0/0'; address = '10.0.12.1'; shutdown_attempted = $false; restored = $false; restore_command_utc = @() }
+    if ($PrimaryLink -eq 'R2-R4') {
+        $primary.router = 'R2'
+        $primary.interface = 'FastEthernet1/0'
+        $primary.address = '10.0.24.1'
     }
+    $target = "$($primary.router) $($primary.interface)"
+    $plan = "Verify R1-R2-R4; shut $target and verify R1-R3-R4; "
+    if ($TestDirectBackup) {
+        $plan += 'shut R1 FastEthernet1/0 and verify direct R1-R4; restore R1 FastEthernet1/0 and verify R1-R3-R4; '
+    }
+    $plan += "restore $target and verify R1-R2-R4. No startup save."
     Write-Output $plan
     if ($CaptureTraceroute) { Write-Output 'Traceroute capture enabled in both directions at every route checkpoint; maximum TTL 4.' }
     if ($MeasureLoss) { Write-Output 'R4 will probe the R1 loopback around the primary link shutdown and restoration, then path checks will run.' }
@@ -38,9 +47,10 @@ function Invoke-CoreFailover {
     $result.capture_traceroute = [bool]$CaptureTraceroute
     $result.measure_loss = [bool]$MeasureLoss
     $result.test_direct_backup = [bool]$TestDirectBackup
-    $primary = [ordered]@{ interface = 'FastEthernet0/0'; address = '10.0.12.1'; shutdown_attempted = $false; restored = $false; restore_command_utc = @() }
-    $secondary = [ordered]@{ interface = 'FastEthernet1/0'; address = '10.0.13.1'; shutdown_attempted = $false; restored = $false; restore_command_utc = @() }
-    if ($TestDirectBackup) { $result.links = [ordered]@{ primary = $primary; secondary = $secondary } }
+    $result.primary_link = $PrimaryLink
+    $secondary = [ordered]@{ router = 'R1'; interface = 'FastEthernet1/0'; address = '10.0.13.1'; shutdown_attempted = $false; restored = $false; restore_command_utc = @() }
+    $result.links = [ordered]@{ primary = $primary }
+    if ($TestDirectBackup) { $result.links.secondary = $secondary }
     $probe = $null
     function Save-FailoverEvidence {
         ConvertTo-Json -InputObject $transcript.ToArray() -Depth 12 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'console-transcript.json') -Encoding UTF8
@@ -99,58 +109,58 @@ function Invoke-CoreFailover {
         return $Brief -match ('(?m)^' + [regex]::Escape($Interface) + '[ \t]+' + [regex]::Escape($Address) + '[ \t]+YES[ \t]+\S+[ \t]+up[ \t]+up\s*\r?$')
     }
     function Assert-FailoverInterface($Link, [string] $Brief) {
-        $config = Invoke-FailoverCommand R1 "show running-config interface $($Link.interface)"
+        $config = Invoke-FailoverCommand $Link.router "show running-config interface $($Link.interface)"
         if ($config -notmatch ('(?m)^interface ' + [regex]::Escape($Link.interface) + '\s*\r?$') -or
             $config -notmatch ('(?m)^\s*ip address ' + [regex]::Escape($Link.address) + ' 255\.255\.255\.252\s*\r?$') -or
             $config -match '(?m)^\s*shutdown\s*\r?$' -or
             -not (Test-FailoverInterfaceUp $Brief $Link.interface $Link.address)) {
-            throw "R1 $($Link.interface) does not match the active baseline."
+            throw "$($Link.router) $($Link.interface) does not match the active baseline."
         }
     }
     function Disable-FailoverLink($Link) {
-        $null = Invoke-FailoverCommand R1 'configure terminal'
-        $null = Invoke-FailoverCommand R1 "interface $($Link.interface)"
+        $null = Invoke-FailoverCommand $Link.router 'configure terminal'
+        $null = Invoke-FailoverCommand $Link.router "interface $($Link.interface)"
         # A lost acknowledgement can hide a successful change.
         $Link.shutdown_attempted = $true
         $result.shutdown_attempted = $true
         Save-FailoverEvidence
         $Link.shutdown_utc = [DateTime]::UtcNow.ToString('o')
-        if ($Link.interface -eq $primary.interface) { $result.shutdown_utc = $Link.shutdown_utc }
-        $null = Invoke-FailoverCommand R1 'shutdown'
-        $null = Invoke-FailoverCommand R1 'end'
+        if ($Link -eq $primary) { $result.shutdown_utc = $Link.shutdown_utc }
+        $null = Invoke-FailoverCommand $Link.router 'shutdown'
+        $null = Invoke-FailoverCommand $Link.router 'end'
     }
     function Restore-FailoverLink($Link) {
         # Retry through a fresh connection if an acknowledgement/connection was lost.
         for ($restoreAttempt = 1; $restoreAttempt -le 2; $restoreAttempt++) {
             try {
                 if ($restoreAttempt -eq 2) {
-                    Close-IosConsole $sessions.R1
-                    $node = @($nodes | Where-Object { $_.name -eq 'R1' })[0]
-                    $sessions.R1 = Open-IosConsole $node.console_host $node.console
+                    Close-IosConsole $sessions[$Link.router]
+                    $node = @($nodes | Where-Object { $_.name -eq $Link.router })[0]
+                    $sessions[$Link.router] = Open-IosConsole $node.console_host $node.console
                 }
                 # end is valid only in configuration mode. At EXEC IOS treats
                 # it as a hostname and may spend a minute attempting DNS.
-                if ($sessions.R1.Prompt -match '\(') {
-                    $null = Invoke-FailoverCommand R1 'end'
+                if ($sessions[$Link.router].Prompt -match '\(') {
+                    $null = Invoke-FailoverCommand $Link.router 'end'
                 }
-                if ($sessions.R1.Prompt -cne 'R1#') {
-                    throw 'Restoration requires a privileged EXEC prompt on R1.'
+                if ($sessions[$Link.router].Prompt -cne "$($Link.router)#") {
+                    throw "Restoration requires a privileged EXEC prompt on $($Link.router)."
                 }
-                $null = Invoke-FailoverCommand R1 'configure terminal'
-                $null = Invoke-FailoverCommand R1 "interface $($Link.interface)"
+                $null = Invoke-FailoverCommand $Link.router 'configure terminal'
+                $null = Invoke-FailoverCommand $Link.router "interface $($Link.interface)"
                 $Link.restore_command_utc += [DateTime]::UtcNow.ToString('o')
-                if ($Link.interface -eq $primary.interface) { $result.restore_command_utc = $Link.restore_command_utc }
-                $null = Invoke-FailoverCommand R1 'no shutdown'
-                $null = Invoke-FailoverCommand R1 'end'
+                if ($Link -eq $primary) { $result.restore_command_utc = $Link.restore_command_utc }
+                $null = Invoke-FailoverCommand $Link.router 'no shutdown'
+                $null = Invoke-FailoverCommand $Link.router 'end'
                 $linkUp = $false
                 for ($linkAttempt = 0; $linkAttempt -lt 10; $linkAttempt++) {
-                    $brief = Invoke-FailoverCommand R1 'show ip interface brief'
+                    $brief = Invoke-FailoverCommand $Link.router 'show ip interface brief'
                     if (Test-FailoverInterfaceUp $brief $Link.interface $Link.address) { $linkUp = $true; break }
                     Start-Sleep -Seconds $PollSeconds
                 }
-                if (-not $linkUp) { throw "Restored R1 $($Link.interface) is not up/up." }
+                if (-not $linkUp) { throw "Restored $($Link.router) $($Link.interface) is not up/up." }
                 $Link.restored = $true
-                Write-Output "RESTORED: R1 $($Link.interface) is up/up."
+                Write-Output "RESTORED: $($Link.router) $($Link.interface) is up/up."
                 return
             }
             catch { if ($restoreAttempt -eq 2) { throw } }
@@ -161,7 +171,7 @@ function Invoke-CoreFailover {
         foreach ($link in @($secondary, $primary)) {
             if ($link.shutdown_attempted -and -not $link.restored) {
                 try { Restore-FailoverLink $link }
-                catch { $errors += "$($link.interface): $($_.Exception.Message)" }
+                catch { $errors += "$($link.router) $($link.interface): $($_.Exception.Message)" }
             }
         }
         $result.restored = $result.shutdown_attempted -and $errors.Count -eq 0
@@ -170,23 +180,26 @@ function Invoke-CoreFailover {
     }
     try {
         $consoleEndpoints = @{}
-        foreach ($name in @('R1','R4')) {
+        $consoleRouters = @('R1','R4')
+        if ($primary.router -eq 'R2') { $consoleRouters += 'R2' }
+        foreach ($name in $consoleRouters) {
             $node = @($nodes | Where-Object { $_.name -eq $name })
             if ($node.Count -ne 1) { throw "Missing or duplicate $name." }
             $endpoint = '{0}:{1}' -f $node[0].console_host, $node[0].console
-            if ($consoleEndpoints.ContainsKey($endpoint)) { throw "R1 and R4 share console endpoint $endpoint." }
+            if ($consoleEndpoints.ContainsKey($endpoint)) { throw "Duplicate console endpoint $endpoint." }
             $consoleEndpoints[$endpoint] = $true
             $sessions[$name] = Open-IosConsole $node[0].console_host $node[0].console
             if ($sessions[$name].Prompt -cne "$name#") { throw "Expected $name# at $endpoint. Check the GNS3 console mapping." }
         }
-        $brief = Invoke-FailoverCommand R1 'show ip interface brief'
+        $brief = Invoke-FailoverCommand $primary.router 'show ip interface brief'
         Assert-FailoverInterface $primary $brief
         if ($TestDirectBackup) {
+            $brief = Invoke-FailoverCommand $secondary.router 'show ip interface brief'
             Assert-FailoverInterface $secondary $brief
             $r4Brief = Invoke-FailoverCommand R4 'show ip interface brief'
             if (-not (Test-FailoverInterfaceUp $brief 'FastEthernet2/0' '10.0.14.1') -or
                 -not (Test-FailoverInterfaceUp $r4Brief 'FastEthernet2/0' '10.0.14.2')) {
-                throw 'Direct R1â€“R4 link must be up/up at both endpoints before the test.'
+                throw 'Direct R1–R4 link must be up/up at both endpoints before the test.'
             }
         }
         Wait-FailoverPath baseline primary
@@ -203,10 +216,10 @@ function Invoke-CoreFailover {
             Wait-FailoverPath backup secondary
             if ($TestDirectBackup) {
                 Disable-FailoverLink $secondary
-                $cutBrief = Invoke-FailoverCommand R1 'show ip interface brief'
                 foreach ($link in @($primary, $secondary)) {
+                    $cutBrief = Invoke-FailoverCommand $link.router 'show ip interface brief'
                     $downPattern = '(?m)^' + [regex]::Escape($link.interface) + '[ \t]+' + [regex]::Escape($link.address) + '[ \t]+YES[ \t]+\S+[ \t]+administratively down[ \t]+down\s*\r?$'
-                    if ($cutBrief -notmatch $downPattern) { throw "R1 $($link.interface) is not administratively down." }
+                    if ($cutBrief -notmatch $downPattern) { throw "$($link.router) $($link.interface) is not administratively down." }
                 }
                 Wait-FailoverPath direct direct
                 Restore-FailoverLink $secondary
@@ -237,7 +250,7 @@ function Invoke-CoreFailover {
                     $result.restoration_error = $_.Exception.Message
                     foreach ($link in @($secondary, $primary)) {
                         if ($link.shutdown_attempted -and -not $link.restored) {
-                            Write-Warning "RESTORATION FAILED: on R1, restore $($link.interface) with no shutdown. See the manual recovery steps in README.md."
+                            Write-Warning "RESTORATION FAILED: on $($link.router), restore $($link.interface) with no shutdown. See the manual recovery steps in README.md."
                         }
                     }
                 }

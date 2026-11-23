@@ -6,7 +6,8 @@ param(
     [string] $EvidenceDirectory = 'artifacts/failover',
     [switch] $CaptureTraceroute,
     [switch] $MeasureLoss,
-    [switch] $TestDirectBackup
+    [switch] $TestDirectBackup,
+    [ValidateSet('R1-R2','R2-R4')][string] $PrimaryLink = 'R1-R2'
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ManifestPath) { $ManifestPath = Join-Path $PSScriptRoot '../gns3/core-topology.json' }
@@ -15,4 +16,4 @@ if (-not $ManifestPath) { $ManifestPath = Join-Path $PSScriptRoot '../gns3/core-
 . (Join-Path $PSScriptRoot 'CoreOspf.ps1')
 . (Join-Path $PSScriptRoot 'CoreFailover.ps1')
 . (Join-Path $PSScriptRoot 'FailoverProbes.ps1')
-Invoke-CoreFailover -Mode $Mode -ApiBaseUrl $ApiBaseUrl -ManifestPath $ManifestPath -EvidenceDirectory $EvidenceDirectory -CaptureTraceroute:$CaptureTraceroute -MeasureLoss:$MeasureLoss -TestDirectBackup:$TestDirectBackup
+Invoke-CoreFailover -PrimaryLink $PrimaryLink -Mode $Mode -ApiBaseUrl $ApiBaseUrl -ManifestPath $ManifestPath -EvidenceDirectory $EvidenceDirectory -CaptureTraceroute:$CaptureTraceroute -MeasureLoss:$MeasureLoss -TestDirectBackup:$TestDirectBackup

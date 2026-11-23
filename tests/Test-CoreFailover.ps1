@@ -5,10 +5,10 @@ $manifestPath = Join-Path $PSScriptRoot '../gns3/core-topology.json'
 $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ('failover-' + [guid]::NewGuid())
 function Assert-Failover($Condition, $Message) { if (-not $Condition) { throw "TEST FAILED: $Message" } }
 function Invoke-CoreInterfaceConfiguration { }
-function Invoke-RestMethod { return @([pscustomobject]@{ name='R1'; console_host='127.0.0.1'; console=5001 }, [pscustomobject]@{ name='R4'; console_host='127.0.0.1'; console=5004 }) }
+function Invoke-RestMethod { return @([pscustomobject]@{ name='R1'; console_host='127.0.0.1'; console=5001 }, [pscustomobject]@{ name='R2'; console_host='127.0.0.1'; console=5002 }, [pscustomobject]@{ name='R4'; console_host='127.0.0.1'; console=5004 }) }
 function Open-IosConsole($Address, $Port) {
     $global:FailoverMock.opens++
-    $name = if ($Port -eq 5001) { 'R1' } else { 'R4' }
+    $name = switch ($Port) { 5001 { 'R1' } 5002 { 'R2' } 5004 { 'R4' } default { throw 'Unexpected console' } }
     return [pscustomobject]@{ name = $name; Prompt="$name#" }
 }
 function Close-IosConsole($Session) { $global:FailoverMock.closes++ }
@@ -59,6 +59,11 @@ function Send-IosCommand($Session, $Command) {
         return 'OK'
     }
     if ($Command -in @('shutdown','no shutdown')) {
+        $target = "$($Session.name):$($Session.selectedInterface)"
+        $primaryTarget = if ($state.primaryLink -eq 'R2-R4') { 'R2:FastEthernet1/0' } else { 'R1:FastEthernet0/0' }
+        $allowed = @($primaryTarget)
+        if ($state.scenario -like 'direct-*') { $allowed += 'R1:FastEthernet1/0' }
+        Assert-Failover ($target -in $allowed) "Target router and interface: $target"
         if ($Session.Prompt -notmatch '\(config-if\)#$') { throw 'shutdown requires interface configuration mode' }
     }
     elseif ($Command -match '^(show|ping|traceroute) ' -and $inConfig) { throw 'Diagnostics require EXEC mode in this workflow' }
@@ -70,7 +75,7 @@ function Send-IosCommand($Session, $Command) {
             return "Tracing the route to $destination`r`n  1 *`r`n  2 $destination 12 msec`r`n"
         }
         '^shutdown$' {
-            if ($Session.selectedInterface -eq 'FastEthernet1/0') {
+            if ($Session.name -eq 'R1' -and $Session.selectedInterface -eq 'FastEthernet1/0') {
                 $state.secondaryDown = $true
                 if ($state.scenario -eq 'direct-lost-ack') { throw 'Lost secondary shutdown acknowledgement' }
                 return 'OK'
@@ -80,7 +85,7 @@ function Send-IosCommand($Session, $Command) {
             return 'OK'
         }
         '^no shutdown$' {
-            if ($Session.selectedInterface -eq 'FastEthernet1/0') {
+            if ($Session.name -eq 'R1' -and $Session.selectedInterface -eq 'FastEthernet1/0') {
                 if ($state.scenario -eq 'direct-secondary-restore-failure') { throw 'Secondary restoration failed' }
                 $state.secondaryDown = $false
                 return 'OK'
@@ -90,7 +95,7 @@ function Send-IosCommand($Session, $Command) {
             $state.down = $false; $state.restores++; return 'OK'
         }
         '^show running-config interface (FastEthernet[01]/0)$' {
-            $address = if ($Matches[1] -eq 'FastEthernet0/0') { '10.0.12.1' } else { '10.0.13.1' }
+            $address = if ($Session.name -eq 'R2') { '10.0.24.1' } elseif ($Matches[1] -eq 'FastEthernet0/0') { '10.0.12.1' } else { '10.0.13.1' }
             return "interface $($Matches[1])`r`n ip address $address 255.255.255.252`r`n"
         }
         '^show ip interface brief$' {
@@ -99,6 +104,7 @@ function Send-IosCommand($Session, $Command) {
                 return 'FastEthernet2/0 10.0.14.2 YES manual up up'
             }
             $primaryStatus = if ($state.scenario -eq 'initially-down' -or $state.down) { 'administratively down down' } else { 'up up' }
+            if ($Session.name -eq 'R2') { return "FastEthernet1/0 10.0.24.1 YES manual $primaryStatus" }
             $secondaryStatus = if ($state.secondaryDown) { 'administratively down down' } else { 'up up' }
             return "FastEthernet0/0 10.0.12.1 YES manual $primaryStatus`r`nFastEthernet1/0 10.0.13.1 YES manual $secondaryStatus`r`nFastEthernet2/0 10.0.14.1 YES manual up up"
         }
@@ -124,17 +130,17 @@ function Send-IosCommand($Session, $Command) {
         default { throw "Unexpected command: $Command" }
     }
 }
-try {
+function Test-PrimaryLinkScenarios($primaryLink) {
     foreach ($scenario in @('plan','success','measure','measure-console-failure','trace-success','trace-error','delayed-backup','retry-restore','initially-down','baseline-failure','backup-failure','lost-shutdown-ack','backup-ping-failure','recovery-failure','restore-failure','direct-plan','direct-success','direct-preflight-failure','direct-lost-ack','direct-wrong-path','direct-secondary-restore-failure')) {
-        $global:FailoverMock = @{ scenario=$scenario; down=$false; cuts=0; restores=0; opens=0; closes=0; invalidEnds=0; backupReads=0; restoreFailed=$false; commands=[Collections.Generic.List[string]]::new() }
-        $directory = Join-Path $testDirectory $scenario
+        $global:FailoverMock = @{ scenario=$scenario; primaryLink=$primaryLink; down=$false; cuts=0; restores=0; opens=0; closes=0; invalidEnds=0; backupReads=0; restoreFailed=$false; commands=[Collections.Generic.List[string]]::new() }
+        $directory = Join-Path $testDirectory "$primaryLink-$scenario"
         $isPlan = $scenario -in @('plan','direct-plan')
         $mode = if ($isPlan) { 'plan' } else { 'apply' }
         $failed = $false
         $capture = $scenario -in @('plan','trace-success','trace-error')
         $measure = $scenario -in @('measure','measure-console-failure','lost-shutdown-ack')
         $direct = $scenario -like 'direct-*'
-        try { Invoke-CoreFailover -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 -CaptureTraceroute:$capture -MeasureLoss:$measure -TestDirectBackup:$direct | Out-Null }
+        try { $planOutput = Invoke-CoreFailover -PrimaryLink $primaryLink -Mode $mode -ManifestPath $manifestPath -EvidenceDirectory $directory -Attempts 2 -PollSeconds 0 -CaptureTraceroute:$capture -MeasureLoss:$measure -TestDirectBackup:$direct }
         catch { $failed = $true }
         $state = $global:FailoverMock
         $expectedSuccess = $scenario -in @('success','measure','trace-success','delayed-backup','retry-restore','direct-success')
@@ -145,7 +151,11 @@ try {
         Assert-Failover (-not ($state.commands | Where-Object { $_ -match 'write memory|copy .*startup' })) "$scenario never saves"
         if ($isPlan -or $scenario -in @('initially-down','baseline-failure','direct-preflight-failure')) { Assert-Failover ($state.cuts -eq 0 -and -not $state.secondaryDown) "$scenario cannot cut link" }
         elseif ($scenario -ne 'restore-failure') { Assert-Failover (-not $state.down -and $state.restores -eq 1) "$scenario restores link even after failure" }
-        if ($isPlan) { Assert-Failover ($state.opens -eq 0) 'Plan opens no consoles' }
+        if ($isPlan) {
+            Assert-Failover ($state.opens -eq 0) 'Plan opens no consoles'
+            $target = if ($primaryLink -eq 'R2-R4') { 'R2 FastEthernet1/0' } else { 'R1 FastEthernet0/0' }
+            Assert-Failover (($planOutput -join ' ') -like "*shut $target*") 'Plan identifies selected endpoint'
+        }
         else {
             $evidence = Get-Content (Join-Path $directory 'result.json') -Raw | ConvertFrom-Json
             Assert-Failover ($evidence.passed -eq $expectedSuccess) "$scenario evidence accurately reports status"
@@ -176,8 +186,12 @@ try {
             }
             if (-not $capture) { Assert-Failover (-not (Test-Path (Join-Path $directory 'traceroutes.json'))) 'No unsolicited trace capture' }
         }
-        Write-Output "PASS: $scenario"
+        Write-Output "PASS: $primaryLink $scenario"
     }
+}
+try {
+    Test-PrimaryLinkScenarios 'R1-R2'
+    Test-PrimaryLinkScenarios 'R2-R4'
 }
 finally {
     # This is a uniquely created test directory under the system temporary directory.
