@@ -9,6 +9,10 @@ $probeCommand = 'ping 10.255.0.1 source 10.255.0.4 repeat 1 timeout 1'
 $adjacencyLog = '*Nov 23 16:13:17.763: %OSPF-5-ADJCHG: Process 10, Nbr 10.255.0.2 on FastEthernet0/0 from LOADING to FULL, Loading Done'
 $recoveryEcho = $adjacencyLog + $probeCommand + "`r`nSuccess rate is 100 percent (1/1)`r`nR4#"
 Assert-Failover (Test-IosProbeEcho $recoveryEcho $probeCommand) 'Live recovery echo joined to an OSPF message'
+$downLog = '*Nov 27 08:33:14.815: %OSPF-5-ADJCHG: Process 10, Nbr 10.255.0.2 on FastEthernet0/0 from FULL to DOWN, Neighbor Down: Dead timer expired'
+$downEcho = $recoveryEcho.Replace($adjacencyLog, $downLog)
+Assert-Failover (Test-IosProbeEcho $downEcho $probeCommand) 'Live echo after OSPF dead timer expiration'
+Assert-Failover (-not (Test-IosProbeEcho ($downEcho.Replace('10.255.0.4', '10.255.0.3')) $probeCommand)) 'Wrong ping source after dead timer expiration'
 Assert-Failover (-not (Test-IosProbeEcho ($recoveryEcho.Replace('repeat 1', 'repeat 2')) $probeCommand)) 'Wrong probe command following OSPF message'
 Assert-Failover (-not (Test-IosProbeEcho ("unexpected" + $probeCommand) $probeCommand)) 'Unrecognized prefix before probe command'
 $integrationId = 'ead82e9a-4437-40d9-93fd-db593ba0c650'

@@ -67,8 +67,9 @@ function Test-IosCommandEcho([string] $Text, [string] $ExpectedEcho) {
 }
 
 function Test-IosProbeEcho([string] $Text, [string] $Command) {
-    # On adjacency recovery IOS can append the entire command to "Loading Done".
-    $adjacency = '(?m)^[ \t]*\*?[A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?: %OSPF-5-ADJCHG: Process \d+, Nbr [\d.]+ on \S+ from LOADING to FULL, Loading Done'
+    # IOS can append the echo directly to either adjacency transition.
+    $transition = '(?:LOADING to FULL, Loading Done|FULL to DOWN, Neighbor Down: Dead timer expired)'
+    $adjacency = '(?m)^[ \t]*\*?[A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?: %OSPF-5-ADJCHG: Process \d+, Nbr [\d.]+ on \S+ from ' + $transition
     $echo = [regex]::Escape($Command)
     return [regex]::IsMatch(($Text -creplace $adjacency, ''), "(?m)^[ \t]*(?:R4#)?$echo[ \t]*\r?$")
 }
